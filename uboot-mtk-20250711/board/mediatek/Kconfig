@@ -201,6 +201,16 @@ config MTK_WEB_FAILSAFE_AFTER_BOOT_FAILURE
 	  firmware image available for boot.
 	  This requires booting system using mtkboardboot command.
 
+config MTK_KEENETIC_RAW_FIT_FW
+	bool "Write Keenetic firmware as raw FIT to MTD 'ubi'"
+	default n
+	depends on MEDIATEK_BOOTMENU
+	help
+	  KeeneticOS ports store a raw FIT image in the MTD partition named
+	  "ubi" (not UBI volumes). Enable this so mtkupgrade fw / Web failsafe
+	  firmware upload use mtd write on "ubi" instead of write_ubi_itb_image
+	  (which would recreate UBI volumes and destroy the Keenetic layout).
+
 config MTK_WGET
 	bool "Enable wget command using mtk_tcp"
 	default n
@@ -646,6 +656,22 @@ config MTK_BOARDINFO
 	help
 	  Enable this option will allow mediatek boards to show extend
 	  information when boot-up.
+
+config MTK_NR3053_UCONFIG_AUTOPROVISION
+	bool "Auto-provision Keenetic U-Config on NR3053"
+	depends on TARGET_MT7981 && ENABLE_NAND_NMBM
+	select MTD
+	select MTD_PARTITIONS
+	select SHA256
+	select MD5
+	default n
+	help
+	  Add the nr3053_uconfig command. It validates the two Keenetic
+	  U-Config copies and creates a device-unique VN identity only when
+	  neither copy contains a valid MAC-bound identity. If one copy is
+	  valid, the command may restore only the invalid mirror from it.
+	  This option is board-specific and must not be enabled for layouts
+	  other than the Viettel NR3053 NMBM map.
 
 config MTK_FIP_SUPPORT
 	bool "Enable ATF FIP utilities"

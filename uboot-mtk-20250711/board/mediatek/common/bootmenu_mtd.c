@@ -114,6 +114,16 @@ static const struct bootmenu_entry mtd_bootmenu_entries[] = {
 		.desc = "Startup system",
 		.cmd = "mtkboardboot"
 	},
+#elif defined(CONFIG_MTK_KEENETIC_RAW_FIT_FW)
+	/* Keenetic: raw FIT in MTD "ubi" — no mtkboardboot / no full-chip simg. */
+	{
+		.desc = "Boot Keenetic OS (Default)",
+#ifdef CONFIG_MTK_NR3053_UCONFIG_AUTOPROVISION
+		.cmd = "nr3053_autoboot"
+#else
+		.cmd = "run bootcmd"
+#endif
+	},
 #else
 	{
 		.desc = "Startup system (Default)",
@@ -142,10 +152,12 @@ static const struct bootmenu_entry mtd_bootmenu_entries[] = {
 		.cmd = "mtkupgrade bl33"
 	},
 #endif
+#ifndef CONFIG_MTK_KEENETIC_RAW_FIT_FW
 	{
 		.desc = "Upgrade single image",
 		.cmd = "mtkupgrade simg"
 	},
+#endif
 #ifdef CONFIG_MTK_CHAINLOAD_BL
 	{
 		.desc = "Upgrade next-stage bootloader",

@@ -99,8 +99,14 @@ static int do_post_action(const struct data_part_entry *dpe, const void *data,
 		return run_command("reset", 0);
 	}
 
-	if (dpe->post_action == UPGRADE_ACTION_BOOT)
+	if (dpe->post_action == UPGRADE_ACTION_BOOT) {
+		/* Keenetic raw FIT: same path as cold boot / bootmenu. */
+		if (IS_ENABLED(CONFIG_MTK_NR3053_UCONFIG_AUTOPROVISION))
+			return run_command("nr3053_autoboot", 0);
+		if (IS_ENABLED(CONFIG_MTK_KEENETIC_RAW_FIT_FW))
+			return run_command("run bootcmd", 0);
 		return run_command("mtkboardboot", 0);
+	}
 
 	return CMD_RET_SUCCESS;
 }

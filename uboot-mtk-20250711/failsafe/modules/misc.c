@@ -69,16 +69,31 @@ void version_handler(enum httpd_uri_handler_status status,
 	if (!git_hash || !git_hash[0])
 		git_hash = "unknown";
 
-	if (build_variant && build_variant[0]) {
-		snprintf(version_buf, sizeof(version_buf),
-			 "%s %s%s %s",
-			 version_string, git_hash, dirty ? "-dirty" : "",
-			 build_variant);
-		response->data = version_buf;
-	} else {
-		snprintf(version_buf, sizeof(version_buf),
-			 "%s %s%s",
-			 version_string, git_hash, dirty ? "-dirty" : "");
+	/*
+	 * Omit placeholder tags that confuse the Web UI footer:
+	 * - git hash "unknown" when the build did not stamp a revision
+	 * - variant "default" (build.sh default VARIANT)
+	 */
+	{
+		bool show_hash = git_hash[0] && strcmp(git_hash, "unknown");
+		bool show_variant = build_variant && build_variant[0] &&
+				    strcmp(build_variant, "default");
+
+		if (show_hash && show_variant)
+			snprintf(version_buf, sizeof(version_buf),
+				 "%s %s%s %s",
+				 version_string, git_hash, dirty ? "-dirty" : "",
+				 build_variant);
+		else if (show_hash)
+			snprintf(version_buf, sizeof(version_buf),
+				 "%s %s%s",
+				 version_string, git_hash, dirty ? "-dirty" : "");
+		else if (show_variant)
+			snprintf(version_buf, sizeof(version_buf),
+				 "%s %s", version_string, build_variant);
+		else
+			snprintf(version_buf, sizeof(version_buf),
+				 "%s", version_string);
 		response->data = version_buf;
 	}
 	response->size = strlen(response->data);
@@ -483,6 +498,17 @@ void style_handler(enum httpd_uri_handler_status status,
 	}
 }
 
+static void font_handler(enum httpd_uri_handler_status status,
+			 struct httpd_request *request,
+			 struct httpd_response *response)
+{
+	if (status != HTTP_CB_NEW)
+		return;
+
+	if (failsafe_output_file(response, "webfonts/fa-solid-ui.woff2", "font/woff2"))
+		not_found_handler(status, request, response);
+}
+
 /*
  * Select JS file name from request URI. If the basename matches a known
  * JavaScript filename, return it; otherwise fall back to "main.js".
@@ -496,6 +522,7 @@ static const char *select_js_file(const char *uri)
 		"backup_js.js",
 		"console_js.js",
 		"env_js.js",
+		"uconfig_js.js",
 		"flash_js.js",
 		"settings_js.js",
 		"ubi_js.js",
@@ -584,6 +611,7 @@ void misc_register_handlers(struct httpd_instance *inst)
 	httpd_register_uri_handler(inst, "/initramfs.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/main.js", &js_handler, NULL);
 	httpd_register_uri_handler(inst, "/style.css", &style_handler, NULL);
+	httpd_register_uri_handler(inst, "/webfonts/fa-solid-ui.woff2", &font_handler, NULL);
 	httpd_register_uri_handler(inst, "/uboot.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/version", &version_handler, NULL);
 	httpd_register_uri_handler(inst, "", &not_found_handler, NULL);

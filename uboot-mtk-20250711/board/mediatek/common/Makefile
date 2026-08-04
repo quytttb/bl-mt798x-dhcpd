@@ -34,6 +34,7 @@ obj-$(CONFIG_MTK_BOOTMENU_SNOR_EMMC) += bootmenu_snor_emmc.o
 
 obj-$(CONFIG_MTK_BSPCONF_SUPPORT) += bsp_conf.o cmd_bspconf.o
 obj-$(CONFIG_MTK_BOARDINFO) += board_info.o
+obj-$(CONFIG_MTK_NR3053_UCONFIG_AUTOPROVISION) += nr3053_uconfig.o
 obj-$(CONFIG_MTK_FIP_SUPPORT) += fip.o fip_helper.o cmd_fip.o
 obj-$(CONFIG_MTK_UPGRADE_BL2_VERIFY) += bl2_helper.o cmd_bl2.o
 obj-$(CONFIG_MTK_UPGRADE_FIP_VERIFY) += fip_helper.o

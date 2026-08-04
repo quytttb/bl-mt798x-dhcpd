@@ -34,6 +34,7 @@
 #include <failsafe/fw_type.h>
 
 #include "../board/mediatek/common/boot_helper.h"
+#include "../board/mediatek/common/mtd_helper.h"
 #include "failsafe_internal.h"
 
 /* ------------------------------------------------------------------ */
@@ -44,6 +45,26 @@ static bool failsafe_httpd_running;
 static bool services_auto_started;
 static bool mtk_tcp_done_flag;
 static bool eth_needs_reinit;
+
+/**
+ * mtd_io_yield() - pump Ethernet/TCP while NAND erase/write runs
+ *
+ * Long Keenetic FIT flashes (~18 MiB) otherwise stall the /result HTTP
+ * session: console shows success but the browser stays on UPDATE IN PROGRESS.
+ */
+void mtd_io_yield(void)
+{
+	if (!failsafe_httpd_running)
+		return;
+
+#ifdef CONFIG_NET
+	eth_rx();
+#endif
+#ifdef CONFIG_MTK_TCP
+	mtk_tcp_periodic_check();
+#endif
+	schedule();
+}
 
 /* ------------------------------------------------------------------ */
 /*  Shared state (defined in upgrade.c, used here)                     */
@@ -120,6 +141,9 @@ int start_web_failsafe(void)
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_ENV
 	env_register_handlers(inst);
+#endif
+#ifdef CONFIG_WEBUI_FAILSAFE_KEENETIC_UCONFIG
+	uconfig_register_handlers(inst);
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_UI_BOOTSTRAP
 	theme_register_handlers(inst);
@@ -225,6 +249,9 @@ int start_web_failsafe(void)
 	printf("[FAILSAFE] entering poll loop, done_flag=%d\n", mtk_tcp_done_flag);
 	while (!ctrlc() && !mtk_tcp_done_flag && !auto_action_pending) {
 		bool need_poll = failsafe_httpd_running;
+
+		/* NAND write for /result — never inside eth_rx/HTTP callbacks. */
+		failsafe_flash_poll();
 
 #ifdef CONFIG_MTK_DHCPD
 		need_poll = need_poll || mtk_dhcpd_is_running();

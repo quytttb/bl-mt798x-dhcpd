@@ -1,23 +1,42 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2026 Yuzhii0718
- *
- * All rights reserved.
- *
- * This file is part of the project bl-mt798x-dhcpd
- * You may not use, copy, modify or distribute this file except in compliance with the license agreement.
+ * Keenetic Boot failsafe Web UI — branding for quytttb / Viettel NR3053.
+ * Derived from bl-mt798x-dhcpd failsafe Web UI.
  */
 
 // Project/author constants (centralized for reuse)
-const AUTHOR_HANDLE = "Yuzhii0718";
-const AUTHOR_DISPLAY = "💡Yuzhii";
+const AUTHOR_HANDLE = "quytttb";
+const AUTHOR_DISPLAY = "quytttb";
 const UBOOT_VERSION = 'UBOOT-MTK-20250711';
-const GITHUB_USER_URL = "https://github.com/Yuzhii0718/";
-const PROJECT_REPO_URL = "https://github.com/Yuzhii0718/bl-mt798x-dhcpd";
+const GITHUB_USER_URL = "https://github.com/quytttb/";
+const PROJECT_REPO_URL = "https://github.com/quytttb/viettel-nr3053-uboot-keenetic";
+const PROJECT_DISPLAY = "quytttb/viettel-nr3053-uboot-keenetic";
+const UPSTREAM_REPO_URL = "https://github.com/Yuzhii0718/bl-mt798x-dhcpd";
+const UPSTREAM_REPO_DISPLAY = "Yuzhii0718/bl-mt798x-dhcpd";
+
+const NAV_ICON_CLASSES = {
+    firmware: "download", uboot: "microchip", bl2: "layer-group", gpt: "database",
+    simg: "file-image", factory: "house", initramfs: "bolt", backup: "floppy-disk",
+    flash: "hard-drive", uconfig: "microchip", console: "terminal", reboot: "power-off",
+    settings: "gear",
+};
+
+function fontAwesomeIcon(iconId) {
+    return '<i class="fa-solid fa-' + (NAV_ICON_CLASSES[iconId] || NAV_ICON_CLASSES.settings) +
+        '" aria-hidden="true"></i>';
+}
+
+function syncPageHeroIcon(pageName) {
+    const pageIcons = { index: "firmware", ...NAV_ICON_CLASSES };
+    const hero = document.querySelector(".upload-hero");
+    const iconId = pageIcons[pageName];
+    if (hero && iconId) hero.innerHTML = fontAwesomeIcon(iconId);
+}
 
 // Single global state container (defined eagerly so early helpers can read it).
 var APP_STATE = {
     lang: "en",
+    langPreference: "default",
     theme: "auto",
     page: "",
 };
@@ -27,18 +46,37 @@ function normalizeLang(input) {
     const lowerCaseLanguage = String(input).toLowerCase();
     if (lowerCaseLanguage.indexOf("zh") === 0) return "zh-cn";
     if (lowerCaseLanguage.indexOf("ru") === 0 || lowerCaseLanguage.indexOf("be") === 0 || lowerCaseLanguage.indexOf("uk") === 0) return "ru";
+    if (lowerCaseLanguage === "vi" || lowerCaseLanguage.indexOf("vi-") === 0) return "vi";
     return "en";
+}
+
+function normalizeLangPreference(input) {
+    const preference = String(input || "").toLowerCase();
+    if (preference === "default") return "default";
+    if (preference === "en" || preference.indexOf("en-") === 0) return "en";
+    if (preference === "vi" || preference.indexOf("vi-") === 0) return "vi";
+    if (preference.indexOf("zh") === 0) return "zh-cn";
+    if (preference.indexOf("ru") === 0 || preference.indexOf("be") === 0 || preference.indexOf("uk") === 0) return "ru";
+    return "default";
+}
+
+function detectBrowserLang() {
+    const candidates = navigator.languages?.length
+        ? navigator.languages
+        : (navigator.language ? [navigator.language] : []);
+    return normalizeLang(candidates[0]);
 }
 
 function detectLang() {
     try {
         const storedLang = localStorage.getItem("lang");
-        if (storedLang) return normalizeLang(storedLang);
+        if (storedLang) {
+            APP_STATE.langPreference = normalizeLangPreference(storedLang);
+            return normalizeLang(storedLang);
+        }
     } catch { /* ignore */ }
-    const candidates = navigator.languages?.length
-        ? navigator.languages
-        : (navigator.language ? [navigator.language] : []);
-    return normalizeLang(candidates[0]);
+    APP_STATE.langPreference = "default";
+    return detectBrowserLang();
 }
 
 function detectTheme() {
@@ -108,15 +146,66 @@ function applyI18n(rootNode) {
 }
 
 function setLang(language) {
-    APP_STATE.lang = normalizeLang(language);
+    APP_STATE.langPreference = normalizeLangPreference(language);
+    APP_STATE.lang = APP_STATE.langPreference === "default"
+        ? detectBrowserLang()
+        : APP_STATE.langPreference;
     try {
-        localStorage.setItem("lang", APP_STATE.lang);
+        if (APP_STATE.langPreference === "default") localStorage.removeItem("lang");
+        else localStorage.setItem("lang", APP_STATE.langPreference);
     } catch { /* ignore */ }
     applyI18n(document);
+    updateLanguageSelect();
     if (APP_STATE.page === "backup" && typeof backupRefreshI18n === "function") backupRefreshI18n();
     if (APP_STATE.page === "flash"  && typeof flashRefreshI18n  === "function") flashRefreshI18n();
+    if (APP_STATE.page === "uconfig" && typeof uconfigRefresh === "function") uconfigRefresh();
     if (typeof renderSysInfo === "function") renderSysInfo();
     updateDocumentTitle();
+}
+
+function updateLanguageSelect() {
+    const languageSelect = document.getElementById("settings_language");
+    if (languageSelect) languageSelect.value = APP_STATE.langPreference || "default";
+}
+
+function enhanceFileInputs() {
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+
+    for (const input of fileInputs) {
+        if (input.dataset.i18nFilePicker === "1") continue;
+        if (!input.id) input.id = `file_picker_${Math.random().toString(36).slice(2)}`;
+        input.dataset.i18nFilePicker = "1";
+        input.classList.add("file-picker-native");
+
+        const picker = document.createElement("label");
+        picker.className = "file-picker";
+        picker.htmlFor = input.id;
+
+        const browse = document.createElement("span");
+        browse.className = "file-picker-browse";
+        browse.setAttribute("data-i18n", "filepicker.browse");
+        browse.textContent = t("filepicker.browse", "Browse");
+
+        const name = document.createElement("span");
+        name.className = "file-picker-name";
+        name.setAttribute("data-i18n", "filepicker.none");
+        name.textContent = t("filepicker.none", "No file selected");
+        name.setAttribute("aria-live", "polite");
+
+        picker.append(browse, name);
+        input.insertAdjacentElement("afterend", picker);
+
+        input.addEventListener("change", () => {
+            const selected = input.files && input.files[0];
+            if (selected && selected.name) {
+                name.removeAttribute("data-i18n");
+                name.textContent = selected.name;
+            } else {
+                name.setAttribute("data-i18n", "filepicker.none");
+                name.textContent = t("filepicker.none", "No file selected");
+            }
+        });
+    }
 }
 
 function updateThemeSelect() {
@@ -150,7 +239,7 @@ function setTheme(themeMode, options = {}) {
 const THEME_COLOR_ENV_KEY = "failsafe_theme_color";
 const THEME_COLOR_CACHE_KEY = "failsafe_theme_color_cache";
 const THEME_COLOR_RAINBOW = "rainbow";
-const ACCENT_PRESETS = ["#2563eb", "#0ea5e9", "#14b8a6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#a855f7"];
+const ACCENT_PRESETS = ["#1C96D3", "#2563eb", "#0ea5e9", "#14b8a6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"];
 const THEME_MODE_ENV_KEY = "failsafe_theme_mode";
 const THEME_DARK_VARIANT_ENV_KEY = "failsafe_theme_dark_variant";
 const THEME_DARK_VARIANT_CACHE_KEY = "failsafe_theme_dark_variant_cache";
@@ -496,56 +585,53 @@ function appendAccentControls(container) {
 }
 
 function ensureFavicon() {
+    const href = getLogoSrc();
     let link = document.querySelector("link[rel='icon']");
     if (!link) {
         link = document.createElement("link");
         link.setAttribute("rel", "icon");
         link.setAttribute("type", "image/svg+xml");
-        link.setAttribute("href", "/favicon.svg");
+        link.setAttribute("href", href);
         document.head?.appendChild(link);
-    } else if (link.getAttribute("href") !== "/favicon.svg") {
-        link.setAttribute("href", "/favicon.svg");
+    } else if (link.getAttribute("href") !== href) {
+        link.setAttribute("href", href);
     }
 }
 
-const LOGO_CACHE_KEY = "failsafe_logo_dataurl";
+/*
+ * Official Keenetic K mark from https://keenetic.com/static/img/logo-main-new.svg
+ * (fill matches keenetic.com/favicon.ico). Embedded so sidebar / About / tab icon
+ * never fall back to a stale sessionStorage cache of the old Yuzhii logo.
+ */
+const KEENETIC_LOGO_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 51 41.4" role="img" aria-label="Keenetic">' +
+    '<path fill="#1C96D3" d="M33.4,17.1L51,0.5H37L20.8,16.3H9.2V0.5H0v40.9h9.2V25.5l16.2,0c6.8,0,11.5,1.5,14,4.4c1.5,1.7,2.2,4,2.2,6.9v4.6h9.2v-4.6c0-5-1.5-9.4-4.4-12.8C43.3,20.5,39,18.1,33.4,17.1"/>' +
+    "</svg>";
+
+const KEENETIC_LOGO_DATA_URL = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(KEENETIC_LOGO_SVG);
 
 function getLogoSrc() {
+    // Drop legacy cached Yuzhii / old favicon data URLs from earlier builds.
     try {
-        const cached = sessionStorage.getItem(LOGO_CACHE_KEY);
-        if (cached) return cached;
-    } catch { /* sessionStorage unavailable */ }
-
-    // Async populate cache for next page load
-    fetch("/favicon.svg")
-        .then((r) => r.ok ? r.blob() : Promise.reject())
-        .then((blob) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                if (typeof reader.result === "string" && reader.result.startsWith("data:image")) {
-                    try { sessionStorage.setItem(LOGO_CACHE_KEY, reader.result); } catch {}
-                }
-            };
-            reader.readAsDataURL(blob);
-        })
-        .catch(() => {});
-
-    return "/favicon.svg";
+        sessionStorage.removeItem("failsafe_logo_dataurl");
+    } catch { /* ignore */ }
+    return KEENETIC_LOGO_DATA_URL;
 }
 
 function updateDocumentTitle() {
     if (!isI18nEnabled() || !isI18nAvailable() || !APP_STATE.page) return;
 
+    const brand = t("app.name", "Keenetic Boot");
     const titleKey = `${APP_STATE.page}.title`;
     if (I18N[APP_STATE.lang]?.[titleKey]) {
-        document.title = t(titleKey);
+        document.title = `${brand} · ${t(titleKey)}`;
         return;
     }
 
     if (APP_STATE.page === "flashing") {
-        document.title = t("flashing.title.in_progress");
+        document.title = `${brand} · ${t("flashing.title.in_progress")}`;
     } else if (APP_STATE.page === "booting") {
-        document.title = t("booting.title.in_progress");
+        document.title = `${brand} · ${t("booting.title.in_progress")}`;
     }
 }
 
@@ -559,23 +645,57 @@ function ensureBranding() {
         nextSibling.remove();
     }
 
-    // Ensure an inline brand label exists (check first to avoid re-creation)
+    // Footer: "Keenetic Boot · quytttb" — hide noisy "unknown default" build tags.
     if (!versionNode.querySelector?.(".brand-inline")) {
         const brandNode = document.createElement("span");
         brandNode.className = "brand-inline";
         brandNode.textContent = AUTHOR_DISPLAY;
-        versionNode.append(" ", brandNode);
+
+        const raw = (versionNode.textContent || "").trim();
+        const cleaned = raw
+            .replace(/\bunknown\b/gi, "")
+            .replace(/\bdefault\b/gi, "")
+            .replace(/\s{2,}/g, " ")
+            .trim();
+
+        versionNode.textContent = "";
+        const label = document.createElement("span");
+        label.className = "brand-product";
+        label.textContent = t("app.name", "Keenetic Boot");
+        versionNode.appendChild(label);
+        versionNode.append(" · ");
+        versionNode.appendChild(brandNode);
+        if (cleaned && !/^unknown$/i.test(cleaned)) {
+            const meta = document.createElement("div");
+            meta.className = "version-meta";
+            meta.textContent = cleaned;
+            versionNode.appendChild(meta);
+        }
     }
 
     // Ensure project info block exists (don't duplicate)
     if (versionNode.querySelector?.("#project-info")) return;
     const projectInfo = document.createElement("div");
     projectInfo.id = "project-info";
-    projectInfo.innerHTML = `You can find more infomation about this project: <a href="${PROJECT_REPO_URL}" target="_blank" rel="noopener">Github</a>`;
+    const projectLabel = document.createElement("span");
+    projectLabel.setAttribute("data-i18n", "footer.project.info");
+    projectLabel.textContent = t("footer.project.info", "Project information:");
+    projectInfo.appendChild(projectLabel);
+    projectInfo.append(" ");
+    const projectLink = document.createElement("a");
+    projectLink.href = PROJECT_REPO_URL;
+    projectLink.target = "_blank";
+    projectLink.rel = "noopener";
+    projectLink.textContent = "GitHub";
+    projectInfo.appendChild(projectLink);
     versionNode.appendChild(projectInfo);
 }
 
 function ensureSidebar() {
+    const navIcon = (navId) => {
+        return fontAwesomeIcon(navId);
+    };
+
     const createNavLink = (path, i18nKey, navId) => {
         const link = document.createElement("a");
         link.className = "nav-link";
@@ -583,7 +703,8 @@ function ensureSidebar() {
         link.setAttribute("data-nav-id", navId);
 
         const iconSpan = document.createElement("span");
-        iconSpan.className = "dot";
+        iconSpan.className = "nav-icon-wrap";
+        iconSpan.innerHTML = navIcon(navId);
         link.appendChild(iconSpan);
 
         const labelSpan = document.createElement("span");
@@ -619,7 +740,7 @@ function ensureSidebar() {
     const brandLogo = document.createElement("img");
     brandLogo.className = "logo";
     brandLogo.src = getLogoSrc();
-    brandLogo.alt = "";
+    brandLogo.alt = "Keenetic";
     brandLogo.width = 28;
     brandLogo.height = 28;
     brandContainer.appendChild(brandLogo);
@@ -646,24 +767,9 @@ function ensureSidebar() {
 
     sidebar.appendChild(brandContainer);
 
-    // Controls (language, theme, accent)
+    // Appearance controls remain at the bottom of the sidebar. Language lives in Settings.
     const controlsContainer = document.createElement("div");
-    controlsContainer.className = "sidebar-controls";
-
-    const languageRow = document.createElement("div");
-    languageRow.className = "control-row";
-    const languageLabel = document.createElement("div");
-    languageLabel.setAttribute("data-i18n", "control.language");
-    languageLabel.textContent = t("control.language");
-    languageRow.appendChild(languageLabel);
-
-    const languageSelect = document.createElement("select");
-    languageSelect.id = "lang_select";
-    languageSelect.innerHTML = '<option value="en">English</option><option value="zh-cn">简体中文</option><option value="ru">Русский</option>';
-    languageSelect.value = APP_STATE.lang;
-    languageSelect.onchange = function () { setLang(this.value); };
-    languageRow.appendChild(languageSelect);
-    controlsContainer.appendChild(languageRow);
+    controlsContainer.className = "sidebar-controls sidebar-appearance-controls";
 
     const themeRow = document.createElement("div");
     themeRow.className = "control-row";
@@ -694,16 +800,12 @@ function ensureSidebar() {
     themeRow.appendChild(themeSelect);
     controlsContainer.appendChild(themeRow);
 
-    sidebar.appendChild(controlsContainer);
-
     // Navigation
     const navContainer = document.createElement("div");
     navContainer.className = "nav";
 
-    // Settings (placed before Basic section)
+    // Settings is kept at the end of the navigation, just above appearance.
     const settingsLink = createNavLink("/settings.html", "nav.settings", "settings");
-    settingsLink.style.display = "none";
-    navContainer.appendChild(settingsLink);
 
     // Basic section
     const basicSection = document.createElement("div");
@@ -749,12 +851,16 @@ function ensureSidebar() {
     systemSection.appendChild(systemTitle);
     systemSection.appendChild(createNavLink("/backup.html", "nav.backup", "backup"));
     systemSection.appendChild(createNavLink("/flash.html", "nav.flash", "flash"));
-    systemSection.appendChild(createNavLink("/env.html", "nav.env", "env"));
+    const uconfigLink = createNavLink("/uconfig.html", "nav.uconfig", "uconfig");
+    uconfigLink.style.display = "none";
+    systemSection.appendChild(uconfigLink);
     systemSection.appendChild(createNavLink("/console.html", "nav.console", "console"));
     systemSection.appendChild(createNavLink("/reboot.html", "nav.reboot", "reboot"));
     navContainer.appendChild(systemSection);
+    navContainer.appendChild(settingsLink);
 
     sidebar.appendChild(navContainer);
+    sidebar.appendChild(controlsContainer);
 
     applyI18n(sidebar);
     // Probe all Kconfig-controlled pages
@@ -793,7 +899,9 @@ function ensureHelpModal() {
     const logo = document.createElement("img");
     logo.className = "help-modal-logo";
     logo.src = getLogoSrc();
-    logo.alt = "";
+    logo.alt = "Keenetic";
+    logo.width = 40;
+    logo.height = 32;
     header.appendChild(logo);
 
     const titles = document.createElement("div");
@@ -849,9 +957,23 @@ function ensureHelpModal() {
     projectLink.href = PROJECT_REPO_URL;
     projectLink.target = "_blank";
     projectLink.rel = "noopener";
-    projectLink.textContent = "Yuzhii0718/bl-mt798x-dhcpd";
+    projectLink.textContent = PROJECT_DISPLAY;
     projectDd.appendChild(projectLink);
     info.appendChild(projectDd);
+
+    const upstreamDt = document.createElement("dt");
+    upstreamDt.setAttribute("data-i18n", "help.references");
+    upstreamDt.textContent = t("help.references", "Reference repository");
+    info.appendChild(upstreamDt);
+
+    const upstreamDd = document.createElement("dd");
+    const upstreamLink = document.createElement("a");
+    upstreamLink.href = UPSTREAM_REPO_URL;
+    upstreamLink.target = "_blank";
+    upstreamLink.rel = "noopener";
+    upstreamLink.textContent = UPSTREAM_REPO_DISPLAY;
+    upstreamDd.appendChild(upstreamLink);
+    info.appendChild(upstreamDd);
 
     body.appendChild(info);
     modal.appendChild(body);
@@ -968,11 +1090,13 @@ function appInit(pageName) {
     APP_STATE.lang = detectLang();
     APP_STATE.theme = detectTheme();
     setTheme(APP_STATE.theme, { persistEnv: false, persistLocal: true, silent: true });
-    setLang(APP_STATE.lang);
+    setLang(APP_STATE.langPreference);
     ensureSidebar();
     ensureBranding();
     ensureFavicon();
+    syncPageHeroIcon(pageName);
     applyI18n(document);
+    enhanceFileInputs();
     updateDocumentTitle();
     loadThemeColor();
     loadThemeMode();
@@ -989,11 +1113,12 @@ function appInit(pageName) {
     pageName === "backup" && typeof backupInit === "function" && backupInit();
     pageName === "flash" && typeof flashInit === "function" && flashInit();
     pageName === "console" && typeof consoleInit === "function" && consoleInit();
-    pageName === "env" && typeof envInit === "function" && envInit()
+    pageName === "env" && typeof envInit === "function" && envInit();
+    pageName === "uconfig" && typeof uconfigInit === "function" && uconfigInit();
     pageName === "settings" && typeof settingsInit === "function" && settingsInit();
     pageName === "ubi" && typeof ubiInit === "function" && ubiInit();
 
-    console.log('\n%c Yuzhii0718 ' + UBOOT_VERSION + ' %c ' + GITHUB_USER_URL + ' ', 'color: #fadfa3; background: #030307; padding:5px 0;', 'background: #fadfa3; padding:5px 0;');
+    console.log('\n%c quytttb ' + UBOOT_VERSION + ' %c ' + GITHUB_USER_URL + ' ', 'color: #e8f4fc; background: #1C96D3; padding:5px 0;', 'background: #171a21; color: #9ca3af; padding:5px 0;');
 }
 
 /**
@@ -1016,10 +1141,10 @@ const NAV_VISIBILITY_DEFS = {
         logPrefix: "Console",
         hiddenReason: "feature not enabled in build config",
     },
-    env: {
-        url: "/env.html",
-        logPrefix: "Environment",
-        hiddenReason: "feature not enabled in build config",
+    uconfig: {
+        url: "/uconfig.html",
+        logPrefix: "Keenetic U-Config",
+        hiddenReason: "feature not enabled for this board",
     },
     factory: {
         url: "/factory.html",
@@ -1189,12 +1314,14 @@ function renderSysInfo() {
 
     sysinfoContainer.appendChild(summary);
 
-    const details = document.createElement("details");
-    details.className = "sysinfo-details";
-
-    const summaryNode = document.createElement("summary");
-    summaryNode.textContent = t("sysinfo.more", "More info");
-    details.appendChild(summaryNode);
+    const expandFirmwareInfo = APP_STATE.page === "index";
+    const details = expandFirmwareInfo ? null : document.createElement("details");
+    if (details) {
+        details.className = "sysinfo-details";
+        const summaryNode = document.createElement("summary");
+        summaryNode.textContent = t("sysinfo.more", "More info");
+        details.appendChild(summaryNode);
+    }
 
     const extra = document.createElement("div");
     extra.className = "sysinfo-extra";
@@ -1271,14 +1398,18 @@ function renderSysInfo() {
     }
 
     if (extra.childNodes.length) {
-        details.appendChild(extra);
-        sysinfoContainer.appendChild(details);
-
-        const toggleExpanded = () => {
-            details.open ? sysinfoContainer.classList.add("sysinfo-expanded") : sysinfoContainer.classList.remove("sysinfo-expanded");
-        };
-        details.addEventListener("toggle", toggleExpanded);
-        toggleExpanded();
+        if (expandFirmwareInfo) {
+            sysinfoContainer.classList.add("sysinfo-expanded");
+            sysinfoContainer.appendChild(extra);
+        } else {
+            details.appendChild(extra);
+            sysinfoContainer.appendChild(details);
+            const toggleExpanded = () => {
+                details.open ? sysinfoContainer.classList.add("sysinfo-expanded") : sysinfoContainer.classList.remove("sysinfo-expanded");
+            };
+            details.addEventListener("toggle", toggleExpanded);
+            toggleExpanded();
+        }
     }
 }
 

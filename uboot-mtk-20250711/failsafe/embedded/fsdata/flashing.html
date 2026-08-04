@@ -13,25 +13,37 @@
 		function init() {
 			appInit('flashing');
 
-			ajax({
-				url: '/result',
-				done: function (response) {
-					if (response == 'failed') {
-						location = '/fail.html'
-						return
-					}
+			var finished = false;
 
-					document.getElementById('title').innerHTML = t('flashing.title.done')
-					document.getElementById('info').innerHTML = t('flashing.info.done')
-					var spinner = document.getElementById('l')
-					spinner && (spinner.style.display = 'none')
-					var actions = document.getElementById('reboot_actions')
-					actions && (actions.style.display = 'block')
-					var btn = document.getElementById('reboot_btn')
-					btn && (btn.onclick = function () { location = '/reboot.html' })
-				},
-				timeout: 1800000
-			})
+			function pollResult() {
+				if (finished)
+					return;
+
+				var xhr = new XMLHttpRequest();
+				xhr.timeout = 10000;
+				xhr.onload = function () {
+					if (finished || xhr.status !== 200)
+						return;
+					var r = (xhr.responseText || '').replace(/\s+/g, '');
+					if (r === 'busy')
+						return;
+					if (r === 'failed') {
+						finished = true;
+						location = '/fail.html';
+						return;
+					}
+					if (r === 'success') {
+						finished = true;
+						location = '/reboot.html';
+					}
+				};
+				xhr.open('GET', '/result');
+				xhr.send();
+			}
+
+			/* Queue flash immediately; poll until NAND write finishes. */
+			pollResult();
+			setInterval(pollResult, 1500);
 		}
 	</script>
 </head>

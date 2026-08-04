@@ -313,7 +313,9 @@ How to flash:
 
 ### Change failsafe WEB UI start key
 
-Default set `glbtn_key=reset,wps,mesh`, it means the glbtn command will search for GPIOs with labels "reset", "wps" and "mesh" in order, and use the first one found as the failsafe WEB UI start key.
+Default set `glbtn_key=reset,wps` and `glbtn_gpio=gpio 1,gpio 0`
+(Reset GPIO1 + WPS GPIO0, ACTIVE_LOW). The glbtn command checks those
+GPIOs / button labels; hold any configured key for 4 seconds to start httpd.
 
 The following priorities are now supported:
 

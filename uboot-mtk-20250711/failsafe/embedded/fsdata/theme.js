@@ -1,11 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2026 Yuzhii0718
- *
- * All rights reserved.
- *
- * This file is part of the project bl-mt798x-dhcpd
- * You may not use, copy, modify or distribute this file except in compliance with the license agreement.
+ * Keenetic Boot failsafe theme bootstrap (quytttb / Viettel NR3053).
+ * Derived from bl-mt798x-dhcpd failsafe Web UI.
  */
 
 /**
@@ -28,7 +24,7 @@
     const TRANSITION_DURATION_MS = 620;
     const HEX_SHORT = /^[0-9a-f]{3}$/i;
     const HEX_FULL  = /^[0-9a-f]{6}$/i;
-    const ACCENT_PRESETS = ["#2563eb", "#0ea5e9", "#14b8a6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#a855f7"];
+    const ACCENT_PRESETS = ["#1C96D3", "#2563eb", "#0ea5e9", "#14b8a6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"];
     const THEME_COLOR_RAINBOW = "rainbow";
 
     /* ── Preferences ────────────────────────────────────────── */

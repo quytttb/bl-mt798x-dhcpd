@@ -250,7 +250,9 @@ static int glbtn_show_help(void)
 	printf("  glbtn_gpio  Comma-separated GPIO names resolved by dm_gpio_lookup_name().\n");
 	printf("              Supports optional prefixes: gpio / pio\n");
 	printf("              Supports optional active-low override with '!'.\n");
-	printf("              Example: setenv glbtn_gpio 'gpio 12,!gpio 13'\n");
+	printf("              Example: setenv glbtn_gpio 'gpio 1,gpio 0'\n");
+	printf("              (NR3053/32x6: Reset=1, WPS=0, ACTIVE_LOW default;\n");
+	printf("               prefix '!' flips polarity)\n");
 	printf("\n");
 
 	printf("Notes:\n");

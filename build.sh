@@ -5,7 +5,7 @@
 #   Run './build.sh --help' for full usage information.
 # ============================================================================
 
-AUTHOR="Yuzhii"
+AUTHOR="quytttb"
 
 TOOLCHAIN_ARM=arm-linux-gnueabi-
 TOOLCHAIN_AARCH64=aarch64-linux-gnu-

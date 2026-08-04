@@ -26,6 +26,9 @@
 #include <bootcount.h>
 #include <crypt.h>
 #include <dm/ofnode.h>
+#ifdef CONFIG_MTK_NR3053_UCONFIG_AUTOPROVISION
+#include <nr3053_uconfig.h>
+#endif
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -505,6 +508,11 @@ void autoboot_command(const char *s)
 		 (stored_bootdelay != -1 && !abortboot(stored_bootdelay)))) {
 		bool lock;
 		int prev;
+
+#ifdef CONFIG_MTK_NR3053_UCONFIG_AUTOPROVISION
+		/* The stop-key check above remains a read-only RAM-test gate. */
+		nr3053_uconfig_autoboot_prepare();
+#endif
 
 		lock = autoboot_keyed() &&
 			!IS_ENABLED(CONFIG_AUTOBOOT_KEYED_CTRLC);

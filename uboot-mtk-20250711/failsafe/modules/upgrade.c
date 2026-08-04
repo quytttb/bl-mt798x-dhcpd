@@ -39,6 +39,17 @@ bool upgrade_success;
 bool auto_action_pending;
 failsafe_fw_t fw_type;
 
+/* Deferred NAND write — must not run inside eth_rx/HTTP callbacks. */
+enum {
+	FLASH_JOB_IDLE = 0,
+	FLASH_JOB_QUEUED,
+	FLASH_JOB_RUNNING,
+	FLASH_JOB_DONE,
+};
+
+static int flash_job_state = FLASH_JOB_IDLE;
+static int flash_job_ret = -1;
+
 /* ------------------------------------------------------------------ */
 /*  MTD layout (conditionally compiled)                                */
 /* ------------------------------------------------------------------ */
@@ -66,9 +77,16 @@ static bool failsafe_auto_reboot_enabled(void)
 {
 	const char *val = env_get("failsafe_auto_reboot");
 
-	if (!val || !val[0])
+	/*
+	 * Keenetic-mod / Bootstrap: default OFF so /result can return and the
+	 * UI can open REBOOT DEVICE (FIP & Firmware). Opt-in only via env.
+	 */
+	if (!val || !val[0]) {
+		if (IS_ENABLED(CONFIG_MTK_KEENETIC_RAW_FIT_FW))
+			return false;
 		return IS_ENABLED(CONFIG_WEBUI_FAILSAFE_UI_GL) ||
 		       IS_ENABLED(CONFIG_WEBUI_FAILSAFE_UI_MTK);
+	}
 
 	if (!strcmp(val, "1") || !strcasecmp(val, "true") ||
 	    !strcasecmp(val, "yes") || !strcasecmp(val, "on"))
@@ -290,6 +308,10 @@ done:
 	upload_data_id = upload_id;
 	upload_data = fw->data;
 	upload_size = fw->size;
+	flash_job_state = FLASH_JOB_IDLE;
+	flash_job_ret = -1;
+	upgrade_success = false;
+	auto_action_pending = false;
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
 	mtd_layout_label[0] = '\0';
 	mtd_layout_save_pending = false;
@@ -323,106 +345,94 @@ done:
 }
 
 /* ------------------------------------------------------------------ */
-/*  Result handler (flashing)                                          */
+/*  Deferred flash job (run outside HTTP/TCP callback)                 */
 /* ------------------------------------------------------------------ */
 
-struct flashing_status {
-	char buf[4096];
-	int ret;
-	int body_sent;
-};
+void failsafe_flash_poll(void)
+{
+	if (flash_job_state != FLASH_JOB_QUEUED)
+		return;
+
+	flash_job_state = FLASH_JOB_RUNNING;
+
+#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
+	failsafe_prepare_mtd_layout();
+	mtd_layout_save_pending = mtd_layout_label[0] != '\0';
+#endif
+
+	if (fw_type == FW_TYPE_INITRD)
+		flash_job_ret = 0;
+	else
+		flash_job_ret = failsafe_write_image(upload_data, upload_size,
+						     fw_type);
+
+#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
+	if (flash_job_ret)
+		mtd_layout_save_pending = false;
+	else
+		failsafe_save_mtd_layout();
+#endif
+
+	/* Invalidate upload payload once consumed. */
+	upload_data_id = rand();
+
+	upgrade_success = !flash_job_ret;
+	flash_job_state = FLASH_JOB_DONE;
+
+	/*
+	 * Auto-action only after the job finishes in the poll loop (not in the
+	 * HTTP callback). FIP/BL2 never auto-reset — UI must show REBOOT DEVICE.
+	 */
+	auto_action_pending = upgrade_success &&
+		(fw_type == FW_TYPE_INITRD ||
+		 (failsafe_auto_reboot_enabled() &&
+		  fw_type != FW_TYPE_FIP && fw_type != FW_TYPE_BL2));
+
+	if (auto_action_pending)
+		mtk_tcp_close_all_conn();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Result handler (flashing)                                          */
+/* ------------------------------------------------------------------ */
 
 void result_handler(enum httpd_uri_handler_status status,
 			  struct httpd_request *request,
 			  struct httpd_response *response)
 {
-	struct flashing_status *st;
-	u32 size;
+	const char *body = "failed";
 
-	if (status == HTTP_CB_NEW) {
-		st = calloc(1, sizeof(*st));
-		if (!st) {
-			response->info.code = 500;
-			return;
-		}
-
-		st->ret = -1;
-
-		response->session_data = st;
-
-		response->status = HTTP_RESP_CUSTOM;
-
-		response->info.http_1_0 = 1;
-		response->info.content_length = -1;
-		response->info.connection_close = 1;
-		response->info.content_type = "text/html";
-		response->info.code = 200;
-
-		size = http_make_response_header(&response->info,
-			st->buf, sizeof(st->buf));
-
-		response->data = st->buf;
-		response->size = size;
-
+	if (status != HTTP_CB_NEW)
 		return;
-	}
 
-	if (status == HTTP_CB_RESPONDING) {
-		st = response->session_data;
+	response->status = HTTP_RESP_STD;
+	response->info.code = 200;
+	response->info.connection_close = 1;
+	response->info.content_type = "text/plain";
 
-		if (st->body_sent) {
-			response->status = HTTP_RESP_NONE;
-			return;
+	/*
+	 * Do NOT erase/write NAND here: this runs inside eth_rx → TCP → HTTP.
+	 * Long Keenetic FIT flashes stall TCP and the browser never leaves
+	 * "UPDATE IN PROGRESS" even though UART already printed success.
+	 * Queue the job for failsafe_flash_poll() in the httpd main loop.
+	 */
+	if (flash_job_state == FLASH_JOB_IDLE) {
+		if (upload_data_id == upload_id && upload_data && upload_size) {
+			flash_job_ret = -1;
+			flash_job_state = FLASH_JOB_QUEUED;
+			body = "busy";
+		} else {
+			body = "failed";
 		}
-
-		if (upload_data_id == upload_id) {
-#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
-			failsafe_prepare_mtd_layout();
-			mtd_layout_save_pending = mtd_layout_label[0] != '\0';
-#endif
-			if (fw_type == FW_TYPE_INITRD)
-				st->ret = 0;
-			else
-				st->ret = failsafe_write_image(upload_data,
-							       upload_size, fw_type);
-#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
-			if (st->ret)
-				mtd_layout_save_pending = false;
-#endif
-		}
-
-		/* invalidate upload identifier */
-		upload_data_id = rand();
-
-		if (!st->ret)
-			response->data = "success";
-		else
-			response->data = "failed";
-
-		response->size = strlen(response->data);
-
-		st->body_sent = 1;
-
-		return;
+	} else if (flash_job_state == FLASH_JOB_QUEUED ||
+		   flash_job_state == FLASH_JOB_RUNNING) {
+		body = "busy";
+	} else if (flash_job_state == FLASH_JOB_DONE) {
+		body = flash_job_ret ? "failed" : "success";
 	}
 
-	if (status == HTTP_CB_CLOSED) {
-		st = response->session_data;
-
-		upgrade_success = !st->ret;
-		auto_action_pending = upgrade_success &&
-			(fw_type == FW_TYPE_INITRD || failsafe_auto_reboot_enabled());
-
-#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
-		if (upgrade_success)
-			failsafe_save_mtd_layout();
-#endif
-
-		free(response->session_data);
-
-		if (auto_action_pending)
-			mtk_tcp_close_all_conn();
-	}
+	response->data = body;
+	response->size = strlen(body);
 }
 
 /* ------------------------------------------------------------------ */

@@ -10,6 +10,7 @@
 #include <env.h>
 #include <exports.h>
 #include <errno.h>
+#include <command.h>
 #include <fdt_support.h>
 #include <image.h>
 #include <memalign.h>
@@ -31,6 +32,10 @@
 #include "bsp_conf.h"
 #include "rootdisk.h"
 #include "untar.h"
+
+__weak void mtd_io_yield(void)
+{
+}
 
 #define PART_FIT_NAME		"fit"
 #define PART_UBI_NAME		"ubi"
@@ -228,6 +233,9 @@ int mtd_erase_skip_bad(struct mtd_info *mtd, u64 offset, u64 size,
 
 		if (erasedsize)
 			*erasedsize += mtd->erasesize;
+
+		/* Keep Web failsafe TCP alive during long NAND erase. */
+		mtd_io_yield();
 	}
 
 	if (eraseend)
@@ -407,6 +415,9 @@ int mtd_write_skip_bad(struct mtd_info *mtd, u64 offset, size_t size,
 
 		if (writtensize)
 			*writtensize += ops.retlen;
+
+		/* Keep Web failsafe TCP alive during long NAND write. */
+		mtd_io_yield();
 	}
 
 	if (len) {
@@ -1828,6 +1839,19 @@ int mtd_boot_image(bool do_boot)
 #if defined(CONFIG_CMD_UBI) || !defined(CONFIG_MTK_DUAL_BOOT)
 	struct mtd_info *mtd;
 #endif
+
+	/*
+	 * Keenetic: MTD label "ubi" stores a raw FIT (+ appended squashfs), not
+	 * UBI volumes. After "Upgrade Firmware" + Run image, mtkboardboot must
+	 * not call ubi_part()/boot_from_ubi (image_seq errors / -22).
+	 */
+	if (IS_ENABLED(CONFIG_MTK_KEENETIC_RAW_FIT_FW)) {
+		if (!do_boot)
+			return 0;
+		if (IS_ENABLED(CONFIG_MTK_NR3053_UCONFIG_AUTOPROVISION))
+			return run_command("nr3053_autoboot", 0);
+		return run_command("run bootcmd", 0);
+	}
 
 #ifdef CONFIG_CMD_UBI
 	const char *ubi_boot_part = PART_UBI_NAME;

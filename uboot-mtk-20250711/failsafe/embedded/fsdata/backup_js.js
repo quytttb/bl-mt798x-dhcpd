@@ -1,11 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2026 Yuzhii0718
- *
- * All rights reserved.
- *
- * This file is part of the project bl-mt798x-dhcpd
- * You may not use, copy, modify or distribute this file except in compliance with the license agreement.
+ * Keenetic Boot failsafe Web UI (quytttb / Viettel NR3053).
+ * Derived from bl-mt798x-dhcpd failsafe Web UI.
  */
 
 function setBackupStatus(message) {
@@ -30,7 +26,10 @@ function backupUpdateRangeHint() {
         rangeHintElement.textContent = t("backup.range.hint");
     } else {
         const rangeSize = endValue >= startValue ? endValue - startValue : 0;
-        rangeHintElement.textContent = `Start=${bytesToHuman(startValue)}, End=${bytesToHuman(endValue)}, Size=${bytesToHuman(rangeSize)}`;
+        rangeHintElement.textContent = t("backup.range.summary", "Start=$1, End=$2, Size=$3")
+            .replace("$1", bytesToHuman(startValue))
+            .replace("$2", bytesToHuman(endValue))
+            .replace("$3", bytesToHuman(rangeSize));
     }
 }
 

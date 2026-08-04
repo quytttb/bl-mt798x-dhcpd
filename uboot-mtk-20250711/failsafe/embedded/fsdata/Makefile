@@ -25,9 +25,13 @@ obj-$(CONFIG_WEBUI_FAILSAFE_CONSOLE) += console.o
 FILE_console.o := .min/console.html.gz
 FSPATH_console.o := console.html
 
-obj-$(CONFIG_WEBUI_FAILSAFE_ENV) += env.o
+obj-$(CONFIG_WEBUI_FAILSAFE_ENV_EDITOR) += env.o
 FILE_env.o := .min/env.html.gz
 FSPATH_env.o := env.html
+
+obj-$(CONFIG_WEBUI_FAILSAFE_KEENETIC_UCONFIG) += uconfig.o
+FILE_uconfig.o := .min/uconfig.html.gz
+FSPATH_uconfig.o := uconfig.html
 
 obj-$(CONFIG_WEBUI_FAILSAFE_FACTORY) += factory.o
 FILE_factory.o := .min/factory.html.gz
@@ -81,6 +85,10 @@ obj-y += favicon.o
 FILE_favicon.o := .min/favicon.svg.gz
 FSPATH_favicon.o := favicon.svg
 
+obj-y += fa_solid_ui.o
+FILE_fa_solid_ui.o := .min/fa-solid-ui.woff2.gz
+FSPATH_fa_solid_ui.o := webfonts/fa-solid-ui.woff2
+
 obj-y += style.o
 FILE_style.o := .min/style.css.gz
 FSPATH_style.o := style.css
@@ -93,9 +101,13 @@ obj-$(CONFIG_WEBUI_FAILSAFE_CONSOLE) += console_js.o
 FILE_console_js.o := .min/console_js.js.gz
 FSPATH_console_js.o := console_js.js
 
-obj-$(CONFIG_WEBUI_FAILSAFE_ENV) += env_js.o
+obj-$(CONFIG_WEBUI_FAILSAFE_ENV_EDITOR) += env_js.o
 FILE_env_js.o := .min/env_js.js.gz
 FSPATH_env_js.o := env_js.js
+
+obj-$(CONFIG_WEBUI_FAILSAFE_KEENETIC_UCONFIG) += uconfig_js.o
+FILE_uconfig_js.o := .min/uconfig_js.js.gz
+FSPATH_uconfig_js.o := uconfig_js.js
 
 obj-$(CONFIG_WEBUI_FAILSAFE_FLASH) += flash_js.o
 FILE_flash_js.o := .min/flash_js.js.gz
@@ -180,6 +192,9 @@ $(obj)/.min/%.js.gz: $(obj)/.min/%.js $(WEBUI_FAILSAFE_GZIP_SCRIPT) FORCE
 $(obj)/.min/%.svg.gz: $(src)/%.svg $(WEBUI_FAILSAFE_GZIP_SCRIPT) FORCE
 	$(call if_changed,fsdata_gzembed)
 
+$(obj)/.min/%.woff2.gz: $(src)/%.woff2 $(WEBUI_FAILSAFE_GZIP_SCRIPT) FORCE
+	$(call if_changed,fsdata_gzembed)
+
 # Step 3: Embed GZip-compressed files into object files
 $(obj)/%.o: $(obj)/.min/%.html.gz FORCE
 	$(call if_changed_dep,as_o_html)
@@ -188,6 +203,9 @@ $(obj)/%.o: $(obj)/.min/%.css.gz FORCE
 	$(call if_changed_dep,as_o_html)
 
 $(obj)/%.o: $(obj)/.min/%.js.gz FORCE
+	$(call if_changed_dep,as_o_html)
+
+$(obj)/fa_solid_ui.o: $(obj)/.min/fa-solid-ui.woff2.gz FORCE
 	$(call if_changed_dep,as_o_html)
 
 $(obj)/favicon.o: $(obj)/.min/favicon.svg.gz FORCE

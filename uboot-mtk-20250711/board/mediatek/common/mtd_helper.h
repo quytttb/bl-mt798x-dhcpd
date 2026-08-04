@@ -25,6 +25,14 @@ int mtd_write_skip_bad(struct mtd_info *mtd, u64 offset, size_t size,
 int mtd_read_skip_bad(struct mtd_info *mtd, u64 offset, size_t size,
 		      u64 maxsize, size_t *readsize, void *data);
 
+/**
+ * mtd_io_yield() - optional idle hook between erase/write blocks
+ *
+ * Failsafe httpd overrides this to pump eth_rx/TCP so a long firmware
+ * flash does not stall the browser waiting on /result.
+ */
+void mtd_io_yield(void);
+
 int mtd_update_generic(struct mtd_info *mtd, const void *data, size_t size,
 		       bool verify);
 int mtd_update_partition(const char *name, const void *data, size_t size,

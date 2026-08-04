@@ -1,0 +1,94 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title data-i18n="uconfig.title">Keenetic U-Config</title>
+	<script src="/theme.js"></script>
+	<link rel="stylesheet" href="/style.css">
+	<script src="/i18n.js"></script>
+	<script src="/main.js"></script>
+	<script src="/uconfig_js.js"></script>
+</head>
+
+<body onload="appInit('uconfig')" data-page="uconfig">
+	<div class="app">
+		<aside id="sidebar" class="sidebar"></aside>
+		<div class="main">
+			<div id="m">
+				<div class="card-head">
+					<div class="upload-hero" aria-hidden="true">
+						<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M12 3l7 3v5c0 4.7-2.8 8.1-7 10-4.2-1.9-7-5.3-7-10V6l7-3z"></path>
+							<path d="M9 12l2 2 4-4"></path>
+						</svg>
+					</div>
+					<h1 data-i18n="uconfig.title">KEENETIC U-CONFIG</h1>
+					<p data-i18n="uconfig.hint">Validate, provision or recover the NR3053 device identity. Identity values and secrets are never displayed.</p>
+				</div>
+
+				<div class="card-main">
+					<div class="console-card">
+						<div class="env-toolbar">
+							<span><span data-i18n="uconfig.policy.country">Country policy:</span> <strong>VN</strong></span>
+							<span class="sep"> | </span>
+							<span><span data-i18n="uconfig.policy.size">Image size:</span> <strong>0x80000</strong></span>
+							<span class="sep"> | </span>
+							<span><span data-i18n="uconfig.policy.values">Values:</span> <strong data-i18n="uconfig.policy.redacted">redacted</strong></span>
+						</div>
+						<div id="uconfig_overall" class="sysinfo" data-i18n="uconfig.status.loading">Loading U-Config status...</div>
+						<div class="uconfig-status-list" aria-live="polite">
+							<div id="uconfig_active" class="uconfig-status-row"></div>
+							<div id="uconfig_recovery" class="uconfig-status-row"></div>
+							<div id="uconfig_consistency" class="uconfig-status-row"></div>
+						</div>
+						<div class="form-actions">
+							<button type="button" class="button" onclick="uconfigRefresh()" data-i18n="uconfig.action.refresh">Verify / Refresh</button>
+							<button type="button" class="button button-warn" onclick="uconfigProvision()" data-i18n="uconfig.action.provision">Provision / Repair</button>
+						</div>
+					</div>
+
+					<div class="console-card">
+						<h2 data-i18n="uconfig.backup.title">Private backup</h2>
+						<p data-i18n="uconfig.backup.hint">Download a raw slot for recovery. The downloaded file contains private device identity and Wi-Fi credentials.</p>
+						<div class="form-actions">
+							<button type="button" class="button" onclick="uconfigBackup('active')" data-i18n="uconfig.backup.active">Backup active slot</button>
+							<button type="button" class="button" onclick="uconfigBackup('recovery')" data-i18n="uconfig.backup.recovery">Backup recovery slot</button>
+						</div>
+					</div>
+
+					<div class="console-card">
+						<h2 data-i18n="uconfig.restore.title">Validated restore</h2>
+						<p data-i18n="uconfig.restore.hint">The file must be exactly 0x80000 bytes and match this router's Factory MACs, country VN, KN-3811 identity, checksums and recovery defaults.</p>
+						<div class="form-row">
+							<div class="field">
+								<label for="uconfig_file" data-i18n="uconfig.restore.file">U-Config backup:</label>
+								<input id="uconfig_file" class="field-control" type="file" accept=".bin,application/octet-stream">
+							</div>
+						</div>
+						<div class="form-actions">
+							<button type="button" class="button button-danger" onclick="uconfigRestore()" data-i18n="uconfig.restore.action">Validate and restore both slots</button>
+						</div>
+					</div>
+					<div id="uconfig_message" class="sysinfo" style="display:none"></div>
+				</div>
+
+				<div class="card-foot">
+					<div class="i w">
+						<strong data-i18n="common.warnings">WARNINGS</strong>
+						<ul>
+							<li data-i18n="uconfig.warn.1">Provision and restore may erase/write both U-Config regions. Do not power off.</li>
+							<li data-i18n="uconfig.warn.2">Restore commits the recovery slot first, verifies it, then commits the active slot.</li>
+							<li data-i18n="uconfig.warn.3">Backups are device-specific and must not be shared between routers.</li>
+							<li data-i18n="uconfig.warn.4">This page does not edit U-Boot environment variables.</li>
+						</ul>
+					</div>
+				</div>
+			</div>
+			<div id="version"></div>
+		</div>
+	</div>
+</body>
+
+</html>

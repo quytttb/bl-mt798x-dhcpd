@@ -8,6 +8,7 @@
 #include <mtd.h>
 #include <ubi_uboot.h>
 #include <linux/string.h>
+#include <linux/libfdt.h>
 
 #include "bootmenu_common.h"
 #include "colored_print.h"
@@ -451,6 +452,19 @@ int generic_mtd_write_fw(void *priv, const struct data_part_entry *dpe,
 {
 	int ret = 0;
 
+	/*
+	 * Keenetic: partition label "ubi" holds raw FIT @ 0x600000 (NR3053) /
+	 * board-specific offset — must NOT run write_ubi_itb_image.
+	 */
+	if (IS_ENABLED(CONFIG_MTK_KEENETIC_RAW_FIT_FW)) {
+		cprintln(CAUTION, "*** Keenetic raw FIT → MTD 'ubi' ***");
+		ret = write_mtd_part("ubi", data, size, true);
+		if (ret)
+			cprintln(ERROR, "*** Keenetic firmware write failed (%d) ***",
+				 ret);
+		return ret;
+	}
+
 	ret = mtd_upgrade_image(data, size);
 	if (ret)
 		cprintln(ERROR, "*** Image not supported! ***");
@@ -529,6 +543,15 @@ int generic_mtd_validate_fw(void *priv, const struct data_part_entry *dpe,
 	struct owrt_image_info ii;
 	bool rc, verify_rootfs;
 	struct mtd_info *mtd;
+
+	if (IS_ENABLED(CONFIG_MTK_KEENETIC_RAW_FIT_FW)) {
+		/* Light check: Keenetic ROM is a FIT (FDT magic). */
+		if (size < 64 || fdt_magic(data) != FDT_MAGIC) {
+			cprintln(ERROR, "*** Not a FIT firmware image ***");
+			return -EBADMSG;
+		}
+		return 0;
+	}
 
 	if (IS_ENABLED(CONFIG_MTK_UPGRADE_IMAGE_VERIFY)) {
 		mtd = get_mtd_part(NULL);

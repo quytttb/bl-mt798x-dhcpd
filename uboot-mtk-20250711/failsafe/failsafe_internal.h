@@ -41,6 +41,13 @@ int failsafe_write_image(const void *data, size_t size,
  */
 void failsafe_notify_network_cmd_done(void);
 
+/**
+ * failsafe_flash_poll() - run deferred NAND write outside TCP callbacks
+ *
+ * Queued by /result; must be called from the httpd poll loop.
+ */
+void failsafe_flash_poll(void);
+
 /* ------------------------------------------------------------------ */
 /*  Handler declarations (used by failsafe.c for URI registration)     */
 /* ------------------------------------------------------------------ */
@@ -195,6 +202,9 @@ void flash_register_handlers(struct httpd_instance *inst);
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_ENV
 void env_register_handlers(struct httpd_instance *inst);
+#endif
+#ifdef CONFIG_WEBUI_FAILSAFE_KEENETIC_UCONFIG
+void uconfig_register_handlers(struct httpd_instance *inst);
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_UI_BOOTSTRAP
 void theme_register_handlers(struct httpd_instance *inst);

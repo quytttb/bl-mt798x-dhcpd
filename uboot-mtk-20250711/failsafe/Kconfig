@@ -112,8 +112,28 @@ config WEBUI_FAILSAFE_ENV
 	default y
 	depends on WEBUI_FAILSAFE_ADVANCED
 	help
-	  Enable environment variable management (list/add/delete/reset/restore)
-	  in the failsafe Web UI.
+	  Enable the environment API used by the failsafe settings and optional
+	  generic environment editor.
+
+config WEBUI_FAILSAFE_ENV_EDITOR
+	bool "Enable generic U-Boot environment editor page (DANGEROUS)"
+	default y
+	depends on WEBUI_FAILSAFE_ENV
+	help
+	  Embed and expose the generic U-Boot environment page with
+	  list/add/delete/reset/restore controls. Disable this on dedicated
+	  Keenetic bootloaders: U-Boot still uses its environment internally,
+	  but these variables do not configure KeeneticOS or its U-Config.
+
+config WEBUI_FAILSAFE_KEENETIC_UCONFIG
+	bool "Enable Keenetic NR3053 U-Config management page"
+	default n
+	depends on WEBUI_FAILSAFE_ADVANCED && MTK_NR3053_UCONFIG_AUTOPROVISION
+	help
+	  Add a board-specific, redacted U-Config page for status, one-time
+	  provision/repair, per-slot backup and validated restore. The restore
+	  path only accepts a 0x80000 image bound to this router's Factory MACs,
+	  country VN, KN-3811 identity and complete recovery defaults.
 
 config WEBUI_FAILSAFE_ENV_CUSTOM_ENV
 	bool "Load custom env once on first access"
@@ -142,8 +162,9 @@ config WEBUI_FAILSAFE_ENV_DEFAULT_GLBTN_KEY
 	depends on WEBUI_FAILSAFE_ENV && CMD_GL_BTN
 	help
 	  When enabled, failsafe environment API will automatically create
-	  and persist glbtn_key=reset,wps,mesh if glbtn_key does not exist.
-	  Existing glbtn_key values are never overwritten.
+	  and persist glbtn_key=reset,wps and glbtn_gpio=gpio 1,gpio 0
+	  (Reset GPIO1 + WPS GPIO0, ACTIVE_LOW) if those vars do not exist.
+	  Existing values are never overwritten.
 
 config WEBUI_FAILSAFE_UBI
 	bool "Enable UBI volume management"
