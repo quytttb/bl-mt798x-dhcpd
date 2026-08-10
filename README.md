@@ -97,6 +97,23 @@ make BOARD=zbt_z8103ax-c VARIANT=NONMBM
 make BOARD=ruijie_rg-x60-new VERSION=SP1 SIMG=1
 ```
 
+### Viettel MT7981 boards
+
+This fork includes the following boards for the ImmortalWrt boot flow:
+
+```bash
+# Viettel VHT-32X6V1
+make BOARD=viettel_32x6 VERSION=2025
+
+# Viettel SDMC NR3053
+make BOARD=viettel_nr3053 VERSION=2025
+```
+
+Both boards use SPI-NAND and retain a 2 MiB `Factory` partition. Before using a
+custom bootloader, back up the full flash and Factory partition, verify the
+generated image checksum, and use the matching board only. The FIP locations
+are board-specific: VHT-32X6V1 uses `0x380000`; NR3053 uses `0x400000`.
+
 List available boards for a version:
 
 ```bash

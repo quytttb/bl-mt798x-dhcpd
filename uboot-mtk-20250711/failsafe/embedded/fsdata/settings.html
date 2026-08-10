@@ -55,17 +55,17 @@
 									<input id="set_glbtn_key" class="field-control" type="text"
 										data-env="glbtn_key"
 										autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
-										placeholder="reset,wps,mesh">
+										placeholder="reset,wps">
 								</div>
 								<div class="field">
 									<label for="set_glbtn_gpio" data-i18n="settings.glbtn.gpio">GPIO names (glbtn_gpio):</label>
 									<input id="set_glbtn_gpio" class="field-control" type="text"
 										data-env="glbtn_gpio"
 										autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
-										placeholder="gpio 12,!gpio 13">
+										placeholder="gpio 1,gpio 0">
 								</div>
 							</div>
-							<p class="settings-help" data-i18n="settings.glbtn.help">Comma-separated. Leave empty to use the device default.</p>
+							<p class="settings-help" data-i18n="settings.glbtn.help">Comma-separated. NR3053/32x6 default: Reset GPIO1 + WPS GPIO0 (ACTIVE_LOW). Prefix '!' flips polarity.</p>
 						</section>
 
 						<section class="settings-section" id="set_mtd_section" style="display:none;">

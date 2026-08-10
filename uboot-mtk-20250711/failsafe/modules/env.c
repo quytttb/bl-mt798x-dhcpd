@@ -95,23 +95,38 @@ static int failsafe_env_apply_custom_env(void)
 #endif
 
 #ifdef CONFIG_WEBUI_FAILSAFE_ENV_DEFAULT_GLBTN_KEY
-static void failsafe_env_ensure_default_glbtn_key(void)
+/* NR3053/32x6: Reset=GPIO1, WPS=GPIO0, both ACTIVE_LOW (glbtn default). */
+#define FAILSAFE_DEFAULT_GLBTN_KEY	"reset,wps"
+#define FAILSAFE_DEFAULT_GLBTN_GPIO	"gpio 1,gpio 0"
+
+static int failsafe_env_set_default_if_missing(const char *name, const char *value)
 {
 	const char *val;
 	int ret;
 
-	val = env_get("glbtn_key");
-	if (val)
-		return;
+	val = env_get(name);
+	/* Treat unset and empty the same — never leave glbtn_* blank. */
+	if (val && *val)
+		return 0;
 
-	ret = env_set("glbtn_key", "reset,wps,mesh");
+	ret = env_set(name, value);
 	if (!ret) {
 		ret = env_save();
-		printf("Set default glbtn_key env to 'reset,wps,mesh'\n");
+		printf("Set default %s env to '%s'\n", name, value);
 	}
 
 	if (ret)
-		printf("Warning: failed to set default glbtn_key env\n");
+		printf("Warning: failed to set default %s env\n", name);
+
+	return ret;
+}
+
+static void failsafe_env_ensure_default_glbtn_key(void)
+{
+	(void)failsafe_env_set_default_if_missing("glbtn_key",
+						  FAILSAFE_DEFAULT_GLBTN_KEY);
+	(void)failsafe_env_set_default_if_missing("glbtn_gpio",
+						  FAILSAFE_DEFAULT_GLBTN_GPIO);
 }
 #endif
 
