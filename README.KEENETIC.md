@@ -1,4 +1,4 @@
-# bl-mt798x-dhcpd — Keenetic mod (worktree)
+# bl-mt798x-dhcpd — Keenetic mod
 
 Đây **không** phải tree Immortal.
 
@@ -6,8 +6,8 @@
 - Board duy nhất: `keenetic_nr3053`
 - Build: `../scripts/build_uboot_keenetic.sh nr3053`
 
-Upstream Immortal (gốc, board `viettel_*`):
+Viettel Immortal (board `viettel_*`) nằm trên branch riêng của fork:
 
-`../../IMMORTALWRT/bl-mt798x-dhcpd`
+`https://github.com/quytttb/bl-mt798x-dhcpd/tree/viettel-immortal`
 
 Chi tiết: [`../docs/nr3053/UBOOT_DHCPD_KEENETIC.md`](../docs/nr3053/UBOOT_DHCPD_KEENETIC.md)
