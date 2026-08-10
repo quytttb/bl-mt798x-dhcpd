@@ -9,8 +9,8 @@ const AUTHOR_HANDLE = "quytttb";
 const AUTHOR_DISPLAY = "quytttb";
 const UBOOT_VERSION = 'UBOOT-MTK-20250711';
 const GITHUB_USER_URL = "https://github.com/quytttb/";
-const PROJECT_REPO_URL = "https://github.com/quytttb/viettel-nr3053-uboot-keenetic";
-const PROJECT_DISPLAY = "quytttb/viettel-nr3053-uboot-keenetic";
+const PROJECT_REPO_URL = "https://github.com/quytttb/bl-mt798x-dhcpd/tree/keenetic-nr3053-mod";
+const PROJECT_DISPLAY = "quytttb/bl-mt798x-dhcpd";
 const UPSTREAM_REPO_URL = "https://github.com/Yuzhii0718/bl-mt798x-dhcpd";
 const UPSTREAM_REPO_DISPLAY = "Yuzhii0718/bl-mt798x-dhcpd";
 
