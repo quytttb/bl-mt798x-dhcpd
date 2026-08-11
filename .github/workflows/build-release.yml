@@ -21,13 +21,21 @@ permissions:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       - name: Resolve tag and version
         id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -40,6 +48,16 @@ jobs:
             echo "::error::Tag must use vMAJOR.MINOR.PATCH: $tag" >&2
             exit 1
           fi
+
+          # Create tag on remote if it does not exist yet
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q "refs/tags/$tag"; then
+            echo "Tag $tag already exists on remote, skipping creation."
+          else
+            echo "Tag $tag not found on remote. Creating it pointing to HEAD..."
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+
           checkout_ref="$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
@@ -50,7 +68,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
@@ -75,7 +93,7 @@ jobs:
           (cd output && sha256sum * > sha256sums)
 
       - name: Upload release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mt7981-viettel-${{ needs.prepare.outputs.version }}
           path: output/
@@ -89,7 +107,7 @@ jobs:
       contents: write
     steps:
       - name: Download release assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: mt7981-viettel-${{ needs.prepare.outputs.version }}
           path: release-assets
@@ -98,7 +116,7 @@ jobs:
         run: find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: MT7981 Viettel ${{ needs.prepare.outputs.version }}
