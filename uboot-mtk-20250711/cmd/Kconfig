@@ -3076,8 +3076,7 @@ config CMD_STACKPROTECTOR_TEST
 
 config CMD_GPIOTEST
 	bool "GPIO hardware verification tool"
-	depends on DM_GPIO
-	default n
+	depends on GPIO
 	help
 	  Enable gpiotest command for GPIO hardware verification.
 	  Provides sub-commands to scan all pins, blink LEDs, and monitor

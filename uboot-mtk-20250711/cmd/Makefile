@@ -241,7 +241,11 @@ obj-$(CONFIG_CMD_SCP03) += scp03.o
 obj-$(CONFIG_CMD_GL_BTN) += glbtn.o led_blink.o
 
 # GPIO hardware verification
-obj-$(CONFIG_CMD_GPIOTEST) += gpiotest.o
+ifdef CONFIG_ARCH_MEDIATEK
+obj-$(CONFIG_CMD_GPIOTEST) += gpiotest-filogic.o
+else ifdef CONFIG_ARCH_MTMIPS
+obj-$(CONFIG_CMD_GPIOTEST) += gpiotest-mtmips.o
+endif
 
 obj-$(CONFIG_CMD_SHOW_MTD_LAYOUT) += showlayout.o
 

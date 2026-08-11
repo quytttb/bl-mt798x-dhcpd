@@ -191,6 +191,18 @@ void webconsole_poll_handler(enum httpd_uri_handler_status status,
 	got = want ? membuf_get(&gd->console_out, chunk, want) : 0;
 	chunk[got] = '\0';
 
+	/*
+	 * The overflow flag is sticky in console_record_putc/puts
+	 * (common/console.c): once set it is never cleared.  Clear it
+	 * here after consuming data, but only when the buffer is no
+	 * longer dangerously full -- so the client sees a transient
+	 * "truncated" warning rather than a permanent one.
+	 */
+	if ((gd->flags & GD_FLG_RECORD_OVF) &&
+	    membuf_free((struct membuf *)&gd->console_out) >
+	    WEB_CONSOLE_EXEC_BUF_SIZE / 4)
+		gd->flags &= ~GD_FLG_RECORD_OVF;
+
 	/* Worst case: every char becomes ' ' or escaped with one extra backslash */
 	esc_sz = (size_t)got * 2 + 64;
 	esc = malloc(esc_sz);

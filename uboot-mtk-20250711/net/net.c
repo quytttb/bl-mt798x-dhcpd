@@ -134,6 +134,9 @@
 #if defined(CONFIG_MTK_DHCPD)
 #include <net/mtk_dhcpd.h>
 #endif
+#if defined(CONFIG_MTK_DNSD)
+#include <net/mtk_dnsd.h>
+#endif
 
 /** BOOTP EXTENTIONS **/
 
@@ -514,6 +517,10 @@ restart:
 	 */
 	if (protocol == MTK_TCP)
 		mtk_dhcpd_start();
+#endif
+#if defined(CONFIG_MTK_DNSD)
+	if (protocol == MTK_TCP)
+		mtk_dnsd_start();
 #endif
 
 	if (!test_eth_enabled())

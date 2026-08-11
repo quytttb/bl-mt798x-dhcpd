@@ -182,6 +182,20 @@
 						</section>
 
 						<section class="settings-section">
+							<h2 class="settings-heading" data-i18n="settings.section.dnsd">DNS Server</h2>
+							<div class="form-row">
+								<div class="field">
+									<label for="set_dnsd_domain" data-i18n="settings.dnsd.domain">Resolve domain (dnsd_domain):</label>
+									<input id="set_dnsd_domain" class="field-control" type="text"
+										data-env="dnsd_domain"
+										autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+										placeholder="failsafe.lan">
+								</div>
+							</div>
+							<p class="settings-help" data-i18n="settings.dnsd.help">DNS queries for this domain will resolve to the device IP address. Leave empty to use the default (failsafe.lan).</p>
+						</section>
+
+						<section class="settings-section">
 							<h2 class="settings-heading" data-i18n="settings.section.dhcpd">DHCP Server</h2>
 							<div class="form-row form-row-2">
 								<div class="field">

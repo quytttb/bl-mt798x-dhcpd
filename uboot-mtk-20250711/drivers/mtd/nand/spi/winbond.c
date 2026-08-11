@@ -11,7 +11,6 @@
 #include <linux/device.h>
 #include <linux/kernel.h>
 #endif
-#include <linux/bitfield.h>
 #include <linux/bug.h>
 #include <linux/mtd/spinand.h>
 
@@ -507,11 +506,6 @@ static int winbond_spinand_init(struct spinand_device *spinand)
 		spinand_select_target(spinand, i);
 		spinand_upd_cfg(spinand, WINBOND_CFG_BUF_READ,
 				WINBOND_CFG_BUF_READ);
-	}
-
-	/* W25N01JWZEIG enable continuous read */
-	if (spinand->id.data[1] == 0xaa && spinand->id.data[2] == 0x21) {
-		spinand_upd_cfg(spinand, BIT(3), BIT(3));
 	}
 
 	/* W25N0xLV disable BRC in default */

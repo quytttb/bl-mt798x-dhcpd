@@ -152,6 +152,14 @@ config COPY_BL2
 	bool "Copy BL2 after build"
 	default y
 
+config COMPRESS_FIP
+	bool "Compress FIP images (XZ)"
+	default y
+	help
+	  Compress BL31 and BL33 (U-Boot) inside FIP using XZ compression.
+	  Reduces fip.bin size by ~60%. Requires no BL2 change — decompressor
+	  is already built into BL2 and fallbacks to memcpy for non-compressed data.
+
 config SILENT
 	bool "Run scripts in silent mode"
 	default y

@@ -4,11 +4,9 @@
  *
  */
 #ifndef __UBOOT__
-#include <malloc.h>
 #include <linux/device.h>
 #include <linux/kernel.h>
 #endif
-#include <linux/bug.h>
 #include <linux/mtd/spinand.h>
 
 #define SPINAND_MFR_ETRON		0xD5

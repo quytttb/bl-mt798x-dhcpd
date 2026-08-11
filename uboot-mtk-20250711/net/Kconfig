@@ -284,6 +284,18 @@ config MTK_DHCPD_POOL_SIZE
 	help
 	  Pool size, e.g. 101 means .100 ~ .200.
 
+config MTK_DNSD
+	bool "Minimal DNS server for MediaTek web failsafe"
+	default n
+	depends on MTK_TCP
+	help
+	  Enable a minimal DNS server that resolves a configurable domain
+	  name to the device's IP address while the MediaTek web failsafe
+	  UI (httpd) is running. Users can reach the failsafe page via
+	  a friendly hostname instead of typing the IP address.
+	  Domain is taken from the "dnsd_domain" environment variable,
+	  with a fallback to "failsafe.lan".
+
 config NET_FORCE_IPADDR
 	bool "Use ipaddr and netmask with CONFIG_IPADDR and CONFIG_NETMASK"
 	default n

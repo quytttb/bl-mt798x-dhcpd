@@ -24,6 +24,9 @@
 #ifdef CONFIG_MTK_DHCPD
 #include <net/mtk_dhcpd.h>
 #endif
+#ifdef CONFIG_MTK_DNSD
+#include <net/mtk_dnsd.h>
+#endif
 #ifdef CONFIG_MTK_TELNETD
 #include <net/mtk_telnetd.h>
 #endif
@@ -224,6 +227,10 @@ int start_web_failsafe(void)
 	mtk_dhcpd_start();
 	printf("[FAILSAFE] DHCP server started\n");
 #endif
+#ifdef CONFIG_MTK_DNSD
+	mtk_dnsd_start();
+	printf("[FAILSAFE] DNS server started\n");
+#endif
 
 	/*
 	 * Non-blocking poll loop.  We call eth_rx() and
@@ -256,6 +263,9 @@ int start_web_failsafe(void)
 #ifdef CONFIG_MTK_DHCPD
 		need_poll = need_poll || mtk_dhcpd_is_running();
 #endif
+#ifdef CONFIG_MTK_DNSD
+		need_poll = need_poll || mtk_dnsd_is_running();
+#endif
 
 		if (!services_auto_started && !failsafe_httpd_running) {
 			services_auto_started = true;
@@ -263,6 +273,13 @@ int start_web_failsafe(void)
 			if (!mtk_dhcpd_is_running()) {
 				printf("Starting DHCP server...\n");
 				mtk_dhcpd_start();
+				need_poll = true;
+			}
+#endif
+#ifdef CONFIG_MTK_DNSD
+			if (!mtk_dnsd_is_running()) {
+				printf("Starting DNS server...\n");
+				mtk_dnsd_start();
 				need_poll = true;
 			}
 #endif
@@ -292,6 +309,10 @@ int start_web_failsafe(void)
 				if (mtk_dhcpd_is_running())
 					mtk_dhcpd_start();
 #endif
+#ifdef CONFIG_MTK_DNSD
+				if (mtk_dnsd_is_running())
+					mtk_dnsd_start();
+#endif
 			}
 
 			eth_rx();
@@ -303,6 +324,17 @@ int start_web_failsafe(void)
 		schedule();
 	}
 
+	/*
+	 * Stop services in correct order: DNSD first, then DHCPD.
+	 * DNSD chains on top of DHCPD handler, so DNSD must be
+	 * unstacked before DHCPD to avoid a dangling handler pointer.
+	 */
+#ifdef CONFIG_MTK_DNSD
+	mtk_dnsd_stop();
+#endif
+#ifdef CONFIG_MTK_DHCPD
+	mtk_dhcpd_stop();
+#endif
 	failsafe_httpd_running = false;
 	mtk_tcp_close_all_conn();
 	eth_halt();

@@ -6,7 +6,6 @@
  * Felix Matouschek <felix@matouschek.org>
  */
 
-#include <linux/bitfield.h>
 #ifndef __UBOOT__
 #include <linux/device.h>
 #include <linux/kernel.h>

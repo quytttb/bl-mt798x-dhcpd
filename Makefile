@@ -127,6 +127,9 @@ endif
 ifeq ($(origin COPY_BL2), undefined)
   COPY_BL2 := $(if $(filter y,$(call config_bool,CONFIG_COPY_BL2,y)),1,0)
 endif
+ifeq ($(origin FIP_COMPRESS), undefined)
+  FIP_COMPRESS := $(if $(filter y,$(call config_bool,CONFIG_COMPRESS_FIP,n)),1,0)
+endif
 ifeq ($(origin SILENT), undefined)
   SILENT := $(if $(filter y,$(call config_bool,CONFIG_SILENT,y)),Y,N)
 endif
@@ -229,15 +232,15 @@ build:
 			if [[ "$(BUILD_LOG)" =~ ^[yY1] ]]; then \
 				local log_file="output/build-$${board}-$(VERSION)-$(VARIANT).log"; \
 				echo "Log: $$log_file"; \
-				env -u MAKEFLAGS -u MAKELEVEL -u MFLAGS \
-				BOARD="$$board" VERSION="$(VERSION)" VARIANT="$(VARIANT)" FSTHEME="$(FSTHEME)" \
-				MULTI_LAYOUT="$(MULTI_LAYOUT)" FIXED_MTDPARTS="$(FIXED_MTDPARTS)" SIMG="$(SIMG)" \
-				UBIMNG="$(UBIMNG)" TELNETD="$(TELNETD)" NAND_RAW="$(NAND_RAW)" COPY_BL2="$(COPY_BL2)" SILENT="$(SILENT)" ./build.sh 2>&1 | tee "$$log_file"; \
+			env -u MAKEFLAGS -u MAKELEVEL -u MFLAGS \
+			BOARD="$$board" VERSION="$(VERSION)" VARIANT="$(VARIANT)" FSTHEME="$(FSTHEME)" \
+			MULTI_LAYOUT="$(MULTI_LAYOUT)" FIXED_MTDPARTS="$(FIXED_MTDPARTS)" SIMG="$(SIMG)" \
+			UBIMNG="$(UBIMNG)" TELNETD="$(TELNETD)" NAND_RAW="$(NAND_RAW)" COPY_BL2="$(COPY_BL2)" FIP_COMPRESS="$(FIP_COMPRESS)" SILENT="$(SILENT)" ./build.sh 2>&1 | tee "$$log_file"; \
 		else \
 			env -u MAKEFLAGS -u MAKELEVEL -u MFLAGS \
 			BOARD="$$board" VERSION="$(VERSION)" VARIANT="$(VARIANT)" FSTHEME="$(FSTHEME)" \
 			MULTI_LAYOUT="$(MULTI_LAYOUT)" FIXED_MTDPARTS="$(FIXED_MTDPARTS)" SIMG="$(SIMG)" \
-			UBIMNG="$(UBIMNG)" TELNETD="$(TELNETD)" NAND_RAW="$(NAND_RAW)" COPY_BL2="$(COPY_BL2)" SILENT="$(SILENT)" ./build.sh; \
+			UBIMNG="$(UBIMNG)" TELNETD="$(TELNETD)" NAND_RAW="$(NAND_RAW)" COPY_BL2="$(COPY_BL2)" FIP_COMPRESS="$(FIP_COMPRESS)" SILENT="$(SILENT)" ./build.sh; \
 		fi; \
 	}; \
 	success_count=0; \
@@ -363,15 +366,15 @@ all:
 		if [[ "$(BUILD_LOG)" =~ ^[yY1] ]]; then \
 			local log_file="output/build-$${board}-$(VERSION)-$(VARIANT).log"; \
 			echo "Log: $$log_file"; \
-			env -u MAKEFLAGS -u MAKELEVEL -u MFLAGS \
-			BOARD="$$board" SOC="$$soc" VERSION="$(VERSION)" VARIANT="$(VARIANT)" FSTHEME="$(FSTHEME)" \
-			MULTI_LAYOUT="$(MULTI_LAYOUT)" FIXED_MTDPARTS="$(FIXED_MTDPARTS)" SIMG="$(SIMG)" \
-			UBIMNG="$(UBIMNG)" TELNETD="$(TELNETD)" NAND_RAW="$(NAND_RAW)" COPY_BL2="$(COPY_BL2)" SILENT="$(SILENT)" ./build.sh 2>&1 | tee "$$log_file"; \
-		else \
-			env -u MAKEFLAGS -u MAKELEVEL -u MFLAGS \
-			BOARD="$$board" SOC="$$soc" VERSION="$(VERSION)" VARIANT="$(VARIANT)" FSTHEME="$(FSTHEME)" \
-			MULTI_LAYOUT="$(MULTI_LAYOUT)" FIXED_MTDPARTS="$(FIXED_MTDPARTS)" SIMG="$(SIMG)" \
-			UBIMNG="$(UBIMNG)" TELNETD="$(TELNETD)" NAND_RAW="$(NAND_RAW)" COPY_BL2="$(COPY_BL2)" SILENT="$(SILENT)" ./build.sh; \
+		env -u MAKEFLAGS -u MAKELEVEL -u MFLAGS \
+		BOARD="$$board" SOC="$$soc" VERSION="$(VERSION)" VARIANT="$(VARIANT)" FSTHEME="$(FSTHEME)" \
+		MULTI_LAYOUT="$(MULTI_LAYOUT)" FIXED_MTDPARTS="$(FIXED_MTDPARTS)" SIMG="$(SIMG)" \
+		UBIMNG="$(UBIMNG)" TELNETD="$(TELNETD)" NAND_RAW="$(NAND_RAW)" COPY_BL2="$(COPY_BL2)" FIP_COMPRESS="$(FIP_COMPRESS)" SILENT="$(SILENT)" ./build.sh 2>&1 | tee "$$log_file"; \
+	else \
+		env -u MAKEFLAGS -u MAKELEVEL -u MFLAGS \
+		BOARD="$$board" SOC="$$soc" VERSION="$(VERSION)" VARIANT="$(VARIANT)" FSTHEME="$(FSTHEME)" \
+		MULTI_LAYOUT="$(MULTI_LAYOUT)" FIXED_MTDPARTS="$(FIXED_MTDPARTS)" SIMG="$(SIMG)" \
+		UBIMNG="$(UBIMNG)" TELNETD="$(TELNETD)" NAND_RAW="$(NAND_RAW)" COPY_BL2="$(COPY_BL2)" FIP_COMPRESS="$(FIP_COMPRESS)" SILENT="$(SILENT)" ./build.sh; \
 		fi; \
 	}; \
 	mapfile -t board_cfgs < <(collect_board_configs); \
@@ -643,7 +646,7 @@ help:
 		'  BUILD_FIP=Y|N' \
 		'  BUILD_ATF=Y|N' \
 		'  BUILD_GPT=Y|N' \
-		'  MULTI_LAYOUT=0|1' \
+		'  FIP_COMPRESS=0|1' \
 		'  FIXED_MTDPARTS=0|1' \
 		'  SIMG=0|1' \
 		'  UBIMNG=0|1' \

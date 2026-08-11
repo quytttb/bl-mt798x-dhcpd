@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+
+#include "mt7981-cudy-tr3000-v1.dts"
+
+/ {
+    compatible = "mediatek,mt7981", "mediatek,mt7981-rfb";
+    model = "Oray X1 Pro";
+};

@@ -305,7 +305,7 @@ How to flash:
 
 1. Use TTL tools to connect to the serial port, and use [MTK UARTBOOT](https://github.com/981213/mtk_uartboot/releases)/[MTK-LAUNCHPAD](https://github.com/Yuzhii0718/mtk-launchpad) to ramboot
 
-2. In the Web UI, back up all your flash and partitions [1*](#endnote); this is very important!
+2. In the Web UI(Quick Access `http://failsafe.lan`), back up all your flash and partitions [1*](#endnote); this is very important!
 
 3. Update U-Boot in the WEB UI and upgrade firmware
 

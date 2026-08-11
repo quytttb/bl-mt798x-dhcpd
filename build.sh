@@ -5,6 +5,18 @@
 #   Run './build.sh --help' for full usage information.
 # ============================================================================
 
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+info()    { printf "${GREEN}[INFO]${NC}  %s\n" "$*"; }
+warn()    { printf "${YELLOW}[WARN]${NC}  %s\n" "$*"; }
+error()   { printf "${RED}[ERROR]${NC} %s\n" "$*"; }
+step()    { printf "\n${BLUE}=== %s ===${NC}\n" "$*"; }
+
 AUTHOR="quytttb"
 
 TOOLCHAIN_ARM=arm-linux-gnueabi-
@@ -27,6 +39,7 @@ UBIMNG=${UBIMNG:-0}
 TELNETD=${TELNETD:-0}
 NAND_RAW=${NAND_RAW:-0}
 COPY_BL2=${COPY_BL2:-1}
+FIP_COMPRESS=${FIP_COMPRESS:-0}
 clean_mode=0
 
 print_help() {
@@ -54,6 +67,8 @@ Optional:
   TELNETD             Enable telnetd: 0 | 1                     (default: 0)
   NAND_RAW            Enable NAND raw OOB backup: 0 | 1          (default: 0)
   COPY_BL2            Copy bl2.img to output/: 0 | 1            (default: 1)
+  FIP_COMPRESS        Enable FIP image compression (XZ): 0 | 1  (default: 0)
+                      Compresses BL31, BL33 inside FIP to reduce file size
 
 Options:
   --clean, -c         Distclean all source directories and exit
@@ -79,28 +94,28 @@ elif [ "$VERSION" = "SP2" ] || [ "$VERSION" = "sp2" ]; then
     UBOOT_DIR=$UBOOT25
     ATF_DIR=$ATF26
 else
-	echo "Error: Unsupported VERSION. Please specify VERSION=2025/SP1/SP2."
+	error "Unsupported VERSION. Please specify VERSION=2025/SP1/SP2."
     exit 1
 fi
 
 if [ "$clean_mode" = "1" ]; then
 	for dir in "$UBOOT_DIR" "$ATF24" "$ATF25" "$ATF26"; do
 		if [ -d "$dir" ]; then
-			echo "Cleaning $dir"
+			info "Cleaning $dir"
 			(
 				cd "$dir" && make distclean
 			)
 		else
-			echo "$dir does not exist."
+			warn "$dir does not exist."
 		fi
 	done
 
-	echo "Clean done."
+	info "Clean done."
     exit 0
 fi
 
 if [ -z "$BOARD" ]; then
-	echo "Error: BOARD is required. Run '$0 --help' for usage information."
+	error "BOARD is required. Run '$0 --help' for usage information."
 	exit 1
 fi
 
@@ -152,25 +167,23 @@ if [ -z "$SOC" ]; then
 	status=$?
 	if [ "$status" -eq 0 ]; then
 		SOC="$SOC_DETECTED"
-		echo "Auto-detected SOC: $SOC"
+		info "Auto-detected SOC: $SOC"
 	elif [ "$status" -eq 2 ]; then
-		echo "Error: Multiple SOC matches for BOARD=$BOARD:$SOC_DETECTED"
-		echo "Please set SOC manually."
+		error "Multiple SOC matches for BOARD=$BOARD:$SOC_DETECTED"
+		error "Please set SOC manually."
 		exit 1
 	else
-		echo "Error: Unable to auto-detect SOC for BOARD=$BOARD"
-		echo "Please set SOC manually."
+		error "Unable to auto-detect SOC for BOARD=$BOARD"
+		error "Please set SOC manually."
 		exit 1
 	fi
 fi
 
-echo "======================================================================"
-echo "Checking environment..."
-echo "======================================================================"
+step "Checking environment..."
 
-echo "Trying npm..."
+info "Trying npm..."
 command -v npm
-[ "$?" != "0" ] && { echo "Error: npm is not installed on this system."; exit 0; }
+[ "$?" != "0" ] && { error "npm is not installed on this system."; exit 0; }
 
 ensure_failsafe_js_deps() {
 	failsafe_dir="$UBOOT_DIR/failsafe"
@@ -179,28 +192,28 @@ ensure_failsafe_js_deps() {
 	marker="$embed_dir/.npm-install-done"
 
 	if [ ! -f "$package_json" ]; then
-		echo "Skipping failsafe JS dependency setup: $package_json not found."
+		info "Skipping failsafe JS dependency setup: $package_json not found."
 		return 0
 	fi
 
 	if [ -f "$marker" ] && [ -d "$embed_dir/node_modules/uglify-js" ]; then
-		echo "Failsafe JS build dependencies already installed."
+		info "Failsafe JS build dependencies already installed."
 		return 0
 	fi
 
-	command -v npm >/dev/null 2>&1 || { echo "Error: npm is not installed on this system."; exit 1; }
-	echo "Installing failsafe JS build dependencies..."
+	command -v npm >/dev/null 2>&1 || { error "npm is not installed on this system."; exit 1; }
+	info "Installing failsafe JS build dependencies..."
 	(cd "$embed_dir" && npm install --no-audit --no-fund) || exit 1
 	touch "$marker"
-	echo "Failsafe JS build dependencies installed."
+	info "Failsafe JS build dependencies installed."
 }
 
-echo "npm found, checking failsafe JS dependencies..."
+info "npm found, checking failsafe JS dependencies..."
 ensure_failsafe_js_deps
 
-echo "Trying python3..."
+info "Trying python3..."
 command -v python3
-[ "$?" != "0" ] && { echo "Error: Python3 is not installed on this system."; exit 0; }
+[ "$?" != "0" ] && { error "Python3 is not installed on this system."; exit 0; }
 
 if [ -z "$TOOLCHAIN" ]; then
 	if [ "$SOC" = "mt7629" ]; then
@@ -208,12 +221,12 @@ if [ -z "$TOOLCHAIN" ]; then
 	else
 		TOOLCHAIN=$TOOLCHAIN_AARCH64
 	fi
-	echo "Using toolchain $TOOLCHAIN for SOC $SOC"
+	info "Using toolchain $TOOLCHAIN for SOC $SOC"
 fi
 
-echo "Trying cross compiler..."
+info "Trying cross compiler..."
 command -v "${TOOLCHAIN}gcc"
-[ "$?" != "0" ] && { echo "${TOOLCHAIN}gcc not found!"; exit 0; }
+[ "$?" != "0" ] && { error "${TOOLCHAIN}gcc not found!"; exit 0; }
 export CROSS_COMPILE="$TOOLCHAIN"
 
 ATF_CFG_SOURCE="${SOC}_${BOARD}_defconfig"
@@ -248,7 +261,7 @@ if [ "$VARIANT" = "default" ] || [ "$VARIANT" = "DEFAULT" ]; then
 		UBOOT_CFG_PATH=$UBOOT_CFG_PATH_MULTILAYOUT
 	fi
 	if [ "$multilayout" = "1" ] && [ ! -f "$UBOOT_CFG_PATH" ]; then
-		echo "Warning: Multi layout config not found, will fallback to single-layout.(Y/n):"
+		warn "Multi layout config not found, will fallback to single-layout.(Y/n):"
 		if [ "$SILENT" != "Y" ]; then
 			read answer
 		fi
@@ -256,7 +269,7 @@ if [ "$VARIANT" = "default" ] || [ "$VARIANT" = "DEFAULT" ]; then
 			multilayout=0
 			UBOOT_CFG_PATH=$UBOOT_CFG_PATH_DEFAULT
 		else
-			echo "Canceled."
+			info "Canceled."
 		fi
 	fi
 elif [ "$VARIANT" = "ubootmod" ] || [ "$VARIANT" = "UBOOTMOD" ]; then
@@ -264,14 +277,14 @@ elif [ "$VARIANT" = "ubootmod" ] || [ "$VARIANT" = "UBOOTMOD" ]; then
 	ATF_CFG_PATH=$ATF_CFG_PATH_DEFAULT
 	UBOOT_CFG_PATH=$UBOOT_CFG_PATH_FIT
 	if [ "$multilayout" = "1" ]; then
-		echo "Warning: No multi layout with ubootmod variant, will disabled it.(Y/n):"
+		warn "No multi layout with ubootmod variant, will disabled it.(Y/n):"
 		if [ "$SILENT" != "Y" ]; then
 			read answer
 		fi
 		if [ "$answer" = "y" ] || [ "$answer" = "Y" ] || [ "$SILENT" = "Y" ]; then
 			multilayout=0
 		else
-			echo "Canceled."
+			info "Canceled."
 		fi
 	fi
 elif [ "$VARIANT" = "ubi" ] || [ "$VARIANT" = "UBI" ]; then
@@ -279,14 +292,14 @@ elif [ "$VARIANT" = "ubi" ] || [ "$VARIANT" = "UBI" ]; then
 	ATF_CFG_PATH=$ATF_CFG_PATH_UBI
 	UBOOT_CFG_PATH=$UBOOT_CFG_PATH_UBI
 	if [ "$multilayout" = "1" ]; then
-		echo "Warning: No multi layout with ubi variant, will disabled it.(Y/n):"
+		warn "No multi layout with ubi variant, will disabled it.(Y/n):"
 		if [ "$SILENT" != "Y" ]; then
 			read answer
 		fi
 		if [ "$answer" = "y" ] || [ "$answer" = "Y" ] || [ "$SILENT" = "Y" ]; then
 			multilayout=0
 		else
-			echo "Canceled."
+			info "Canceled."
 		fi
 	fi
 elif [ "$VARIANT" = "openwrt" ] || [ "$VARIANT" = "OPENWRT" ]; then
@@ -294,14 +307,14 @@ elif [ "$VARIANT" = "openwrt" ] || [ "$VARIANT" = "OPENWRT" ]; then
 	ATF_CFG_PATH=$ATF_CFG_PATH_DEFAULT
 	UBOOT_CFG_PATH=$UBOOT_CFG_PATH_OPENWRT
 	if [ "$multilayout" = "1" ]; then
-		echo "Warning: No multi layout with openwrt variant, will disabled it.(Y/n):"
+		warn "No multi layout with openwrt variant, will disabled it.(Y/n):"
 		if [ "$SILENT" != "Y" ]; then
 			read answer
 		fi
 		if [ "$answer" = "y" ] || [ "$answer" = "Y" ] || [ "$SILENT" = "Y" ]; then
 			multilayout=0
 		else
-			echo "Canceled."
+			info "Canceled."
 		fi
 	fi
 elif [ "$VARIANT" = "nonmbm" ] || [ "$VARIANT" = "NONMBM" ]; then
@@ -311,7 +324,7 @@ elif [ "$VARIANT" = "nonmbm" ] || [ "$VARIANT" = "NONMBM" ]; then
 		UBOOT_CFG_PATH=$UBOOT_CFG_PATH_NONMBM_MULTILAYOUT
 	fi
 	if [ "$multilayout" = "1" ] && [ ! -f "$UBOOT_CFG_PATH" ]; then
-		echo "Warning: Multi layout config not found, fallback to single-layout.(Y/n):"
+		warn "Multi layout config not found, fallback to single-layout.(Y/n):"
 		if [ "$SILENT" != "Y" ]; then
 			read answer
 		fi
@@ -319,11 +332,11 @@ elif [ "$VARIANT" = "nonmbm" ] || [ "$VARIANT" = "NONMBM" ]; then
 			multilayout=0
 			UBOOT_CFG_PATH=$UBOOT_CFG_PATH_NONMBM
 		else
-			echo "Canceled."
+			info "Canceled."
 		fi
 	fi
 else
-    echo "Error: Unsupported VARIANT. Please specify VARIANT=default/ubootmod/ubi/nonmbm/openwrt."
+    error "Unsupported VARIANT. Please specify VARIANT=default/ubootmod/ubi/nonmbm/openwrt."
     exit 1
 fi
 
@@ -334,74 +347,71 @@ if grep -Eq "CONFIG_FLASH_DEVICE_EMMC=y|_BOOT_DEVICE_EMMC=y" "$ATF_CFG_PATH" ; t
 fi
 
 if [ "$fixedparts" = "0" ] && [ "$multilayout" = "1" ]; then
-	echo "Error: Multi layout is not compatible with fixed-mtdparts disabled build. Please disable multi layout or enable fixed-mtdparts."
+	error "Multi layout is not compatible with fixed-mtdparts disabled build. Please disable multi layout or enable fixed-mtdparts."
 	exit 1
 fi
 
 for file in "$ATF_CFG_PATH" "$UBOOT_CFG_PATH"; do
 	if [ ! -f "$file" ]; then
-		echo "$file not found!"
+		error "$file not found!"
 		exit 1
 	fi
 done
 
-echo "======================================================================"
-echo "Configuration:"
-echo "======================================================================"
+step "Configuration:"
 
-echo "VERSION: $VERSION"
-echo "VARIANT: $VARIANT"
-echo "TARGET: ${SOC}_${BOARD}"
-echo "ATF Dir: $ATF_DIR"
-echo "U-Boot Dir: $UBOOT_DIR"
-echo "ATF CFG: $ATF_CFG_PATH"
-echo "U-Boot CFG: $UBOOT_CFG_PATH"
-echo "Features: fixed-mtdparts: $fixedparts, multi-layout: $multilayout"
-echo "Failsafe theme: $FSTHEME"
-echo "Failsafe functions: SIMG support: $simg, UBI Management support: $UBIMNG"
-echo "Telnetd support: $TELNETD, NAND RAW R/W support: $NAND_RAW"
-echo "COPY BL2: $COPY_BL2"
+info "VERSION: $VERSION"
+info "VARIANT: $VARIANT"
+info "TARGET: ${SOC}_${BOARD}"
+info "ATF Dir: $ATF_DIR"
+info "U-Boot Dir: $UBOOT_DIR"
+info "ATF CFG: $ATF_CFG_PATH"
+info "U-Boot CFG: $UBOOT_CFG_PATH"
+info "Features: fixed-mtdparts: $fixedparts, multi-layout: $multilayout"
+info "Failsafe theme: $FSTHEME"
+info "Failsafe functions: SIMG support: $simg, UBI Management support: $UBIMNG"
+info "Telnetd support: $TELNETD, NAND RAW R/W support: $NAND_RAW"
+info "COPY BL2: $COPY_BL2"
+info "FIP Compression: $FIP_COMPRESS"
 
-echo "======================================================================"
-echo "Build u-boot..."
-echo "======================================================================"
+step "Build u-boot..."
 
 rm -f "$UBOOT_DIR/u-boot.bin"
 cp -f "$UBOOT_CFG_PATH" "$UBOOT_DIR/.config"
 if [ "$fixedparts" = "1" ]; then
-	echo "Build u-boot with fixed-mtdparts!"
+	info "Build u-boot with fixed-mtdparts!"
 	echo "CONFIG_MEDIATEK_UBI_FIXED_MTDPARTS=y" >> "$UBOOT_DIR/.config"
 	echo "CONFIG_MTK_FIXED_MTD_MTDPARTS=y" >> "$UBOOT_DIR/.config"
 fi
 if [ -n "$VARIANT" ]; then
-	echo "Build u-boot with variant: $VARIANT"
+	info "Build u-boot with variant: $VARIANT"
 	echo "CONFIG_WEBUI_FAILSAFE_BUILD_VARIANT=\"$(echo "$VARIANT" | tr '[:upper:]' '[:lower:]')\"" >> "$UBOOT_DIR/.config"
 fi
 if [ "$FSTHEME" = "bootstrap" ] || [ "$FSTHEME" = "Bootstrap" ]; then
-	echo "Build u-boot with bootstrap fstheme!"
+	info "Build u-boot with bootstrap fstheme!"
 fi
 if [ "$FSTHEME" = "gl" ] || [ "$FSTHEME" = "GL" ]; then
-	echo "Build u-boot with gl fstheme!"
+	info "Build u-boot with gl fstheme!"
 	echo "CONFIG_WEBUI_FAILSAFE_UI_GL=y" >> "$UBOOT_DIR/.config"
 fi
 if [ "$FSTHEME" = "mtk" ] || [ "$FSTHEME" = "MTK" ]; then
-	echo "Build u-boot with mtk fstheme!"
+	info "Build u-boot with mtk fstheme!"
 	echo "CONFIG_WEBUI_FAILSAFE_UI_MTK=y" >> "$UBOOT_DIR/.config"
 fi
 if [ "$simg" = "1" ]; then
-	echo "Build u-boot with failsafe simg support!"
+	info "Build u-boot with failsafe simg support!"
 	echo "CONFIG_WEBUI_FAILSAFE_SIMG=y" >> "$UBOOT_DIR/.config"
 fi
 if [ "$UBIMNG" = "1" ]; then
-	echo "Build u-boot with failsafe UBI management support!"
+	info "Build u-boot with failsafe UBI management support!"
 	echo "CONFIG_WEBUI_FAILSAFE_UBI=y" >> "$UBOOT_DIR/.config"
 fi
 if [ "$TELNETD" = "1" ]; then
-	echo "Build u-boot with telnetd support!"
+	info "Build u-boot with telnetd support!"
 	echo "CONFIG_MTK_TELNETD=y" >> "$UBOOT_DIR/.config"
 fi
 if [ "$NAND_RAW" = "1" ]; then
-	echo "Build u-boot with NAND raw OOB backup support!"
+	info "Build u-boot with NAND raw OOB backup support!"
 	echo "CONFIG_WEBUI_FAILSAFE_NAND_RAW=y" >> "$UBOOT_DIR/.config"
 fi
 
@@ -410,15 +420,13 @@ make -C "$UBOOT_DIR" clean
 make -C "$UBOOT_DIR" -j $(nproc) all
 if [ -f "$UBOOT_DIR/u-boot.bin" ]; then
 	cp -f "$UBOOT_DIR/u-boot.bin" "$ATF_DIR/u-boot.bin"
-	echo "u-boot build done!"
+	info "u-boot build done!"
 else
-	echo "u-boot build fail!"
+	error "u-boot build fail!"
 	exit 1
 fi
 
-echo "======================================================================"
-echo "Build atf..."
-echo "======================================================================"
+step "Build atf..."
 
 if [ -e "$ATF_DIR/makefile" ]; then
 	ATF_MKFILE="makefile"
@@ -432,20 +440,23 @@ if [ "$ATF_CFG_PATH" != "$ATF_CFG_PATH_DEFAULT" ]; then
 	ATF_CFG_TARGET="__variant_${SOC}_${BOARD}_defconfig"
 	ATF_CFG_STAGE_FILE="$ATF_DIR/$CONFIGS_DIR_DEFAULT/$ATF_CFG_TARGET"
 	cp -f "$ATF_CFG_PATH" "$ATF_CFG_STAGE_FILE"
-	echo "Staged ATF config: $ATF_CFG_PATH -> $ATF_CFG_STAGE_FILE"
+	info "Staged ATF config: $ATF_CFG_PATH -> $ATF_CFG_STAGE_FILE"
 fi
 
 make -C "$ATF_DIR" -f "$ATF_MKFILE" clean CONFIG_CROSS_COMPILER="$TOOLCHAIN" CROSS_COMPILER="$TOOLCHAIN"
 rm -rf "$ATF_DIR/build"
 make -C "$ATF_DIR" -f "$ATF_MKFILE" "$ATF_CFG_TARGET" CONFIG_CROSS_COMPILER="$TOOLCHAIN" CROSS_COMPILER="$TOOLCHAIN"
+if [ "$FIP_COMPRESS" = "1" ]; then
+	info "Enable FIP compression (XZ)..."
+	sed -i 's/# _ENABLE_FIP_COMPRESS is not set/_ENABLE_FIP_COMPRESS=y/' "$ATF_DIR/build/.config"
+	printf 'FIP_COMPRESS=1\n' >> "$ATF_DIR/build/.config"
+fi
 make -C "$ATF_DIR" -f "$ATF_MKFILE" all CONFIG_CROSS_COMPILER="$TOOLCHAIN" CROSS_COMPILER="$TOOLCHAIN" CONFIG_BL33="../$UBOOT_DIR/u-boot.bin" BL33="../$UBOOT_DIR/u-boot.bin" -j $(nproc)
 if [ -n "$ATF_CFG_STAGE_FILE" ] && [ -f "$ATF_CFG_STAGE_FILE" ]; then
 	rm -f "$ATF_CFG_STAGE_FILE"
 fi
 
-echo "======================================================================"
-echo "Copying output files..."
-echo "======================================================================"
+step "Copying output files..."
 
 mkdir -p "output"
 if [ -f "$ATF_DIR/build/${SOC}/release/fip.bin" ]; then
@@ -468,15 +479,18 @@ if [ -f "$ATF_DIR/build/${SOC}/release/fip.bin" ]; then
 	if [ "$multilayout" = "1" ]; then
 		FIP_NAME="${FIP_NAME}-multi-layout"
 	fi
+	if [ "$FIP_COMPRESS" = "1" ]; then
+		FIP_NAME="${FIP_NAME}-fipc"
+	fi
 	FIP_MD5=$(md5sum "$ATF_DIR/build/${SOC}/release/fip.bin" | awk '{print $1}')
 	FIP_NAME="${FIP_NAME}_md5-${FIP_MD5}"
-	echo "fip-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
-	echo "fip.bin md5sum: $FIP_MD5"
-	echo "fip.bin size: $(stat -c%s "$ATF_DIR/build/${SOC}/release/fip.bin") bytes"
+	info "fip-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
+	info "fip.bin md5sum: $FIP_MD5"
+	info "fip.bin size: $(stat -c%s "$ATF_DIR/build/${SOC}/release/fip.bin") bytes"
 	cp -f "$ATF_DIR/build/${SOC}/release/fip.bin" "output/${FIP_NAME}.bin"
-	echo "Output: output/${FIP_NAME}.bin"
+	info "Output: output/${FIP_NAME}.bin"
 else
-	echo "fip build fail!"
+	error "fip build fail!"
 	exit 1
 fi
 if grep -Eq "(^_|CONFIG_TARGET_ALL_NO_SEC_BOOT=y)" "$ATF_CFG_PATH"; then
@@ -496,18 +510,18 @@ if grep -Eq "(^_|CONFIG_TARGET_ALL_NO_SEC_BOOT=y)" "$ATF_CFG_PATH"; then
 		fi
 		BL2_MD5=$(md5sum "$ATF_DIR/build/${SOC}/release/bl2.img" | awk '{print $1}')
 		BL2_NAME="${BL2_NAME}_md5-${BL2_MD5}"
-		echo "bl2-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
-		echo "bl2.img md5sum: $BL2_MD5"
-		echo "bl2.img size: $(stat -c%s "$ATF_DIR/build/${SOC}/release/bl2.img") bytes"
+		info "bl2-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
+		info "bl2.img md5sum: $BL2_MD5"
+		info "bl2.img size: $(stat -c%s "$ATF_DIR/build/${SOC}/release/bl2.img") bytes"
 		if [ "$COPY_BL2" = "1" ]; then
 			cp -f "$ATF_DIR/build/${SOC}/release/bl2.img" "output/${BL2_NAME}.img"
-			echo "Output: output/${BL2_NAME}.img"
+			info "Output: output/${BL2_NAME}.img"
 		else
-			echo "Skipping bl2 copy because COPY_BL2 is disabled"
-			echo "You may find the bl2 image at: $ATF_DIR/build/${SOC}/release/bl2.img"
+			info "Skipping bl2 copy because COPY_BL2 is disabled"
+			info "You may find the bl2 image at: $ATF_DIR/build/${SOC}/release/bl2.img"
 		fi
 	else
-		echo "bl2 build fail!"
+		error "bl2 build fail!"
 		exit 1
 	fi
 fi
