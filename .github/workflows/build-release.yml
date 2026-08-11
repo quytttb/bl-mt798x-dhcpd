@@ -66,8 +66,8 @@ jobs:
 
       - name: Build release bootloaders
         run: |
-          make BOARD=viettel_32x6 VERSION=2025 VARIANT=default BUILD_LOG=y
-          make BOARD=viettel_nr3053 VERSION=2025 VARIANT=default BUILD_LOG=y
+          make BOARD=viettel_32x6 VERSION=SP2 VARIANT=default BUILD_LOG=y
+          make BOARD=viettel_nr3053 VERSION=SP2 VARIANT=default BUILD_LOG=y
           test "$(find output -maxdepth 1 -type f | wc -l)" -ge 4
           (cd output && sha256sum * > sha256sums)
 
@@ -107,7 +107,7 @@ jobs:
 
             Bootloader build for Viettel VHT-32X6V1 and SDMC NR3053.
 
-            The release contains the default 2025 FIP and BL2 images for both boards,
+            The release contains the SP2 (TF-A 20260123) FIP and BL2 images for both boards,
             build logs, and `sha256sums`. Flash only the image for the matching model.
             Back up the full flash and Factory partition before updating a bootloader.
           files: release-assets/*

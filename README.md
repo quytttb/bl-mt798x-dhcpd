@@ -103,13 +103,14 @@ This fork includes the following boards for the ImmortalWrt boot flow:
 
 ```bash
 # Viettel VHT-32X6V1
-make BOARD=viettel_32x6 VERSION=2025
+make BOARD=viettel_32x6 VERSION=SP2
 
 # Viettel SDMC NR3053
-make BOARD=viettel_nr3053 VERSION=2025
+make BOARD=viettel_nr3053 VERSION=SP2
 ```
 
-Both boards use SPI-NAND and retain a 2 MiB `Factory` partition. Before using a
+Both boards use SPI-NAND and retain a 2 MiB `Factory` partition. The Viettel
+builds use `SP2`, which selects TF-A `20260123` with U-Boot `20250711`. Before using a
 custom bootloader, back up the full flash and Factory partition, verify the
 generated image checksum, and use the matching board only. The FIP locations
 are board-specific: VHT-32X6V1 uses `0x380000`; NR3053 uses `0x400000`.
@@ -171,7 +172,7 @@ You need to fork this repository to your own account before using GitHub Actions
 
 - **Dev Build** runs automatically after bootloader-related changes are pushed to
   `main`, or can be started manually from the Actions tab. It builds the default
-  2025 FIP and BL2 images for Viettel VHT-32X6V1 and SDMC NR3053, then retains the
+  SP2 (TF-A 20260123) FIP and BL2 images for Viettel VHT-32X6V1 and SDMC NR3053, then retains the
   artifact for seven days. It never creates a GitHub Release.
 - **Build Release** runs when a tag in the form `vMAJOR.MINOR.PATCH` is pushed, or
   manually for an existing tag. It checks out that exact tag, builds the same two

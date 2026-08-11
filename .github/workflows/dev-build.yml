@@ -11,6 +11,7 @@ on:
       - "depends/**"
       - "atf-20240117-bacca82a8/**"
       - "atf-20250711/**"
+      - "atf-20260123/**"
       - "uboot-mtk-20250711/**"
       - ".github/workflows/**"
   workflow_dispatch:
@@ -44,8 +45,8 @@ jobs:
 
       - name: Build Viettel bootloaders
         run: |
-          make BOARD=viettel_32x6 VERSION=2025 VARIANT=default BUILD_LOG=y
-          make BOARD=viettel_nr3053 VERSION=2025 VARIANT=default BUILD_LOG=y
+          make BOARD=viettel_32x6 VERSION=SP2 VARIANT=default BUILD_LOG=y
+          make BOARD=viettel_nr3053 VERSION=SP2 VARIANT=default BUILD_LOG=y
           test "$(find output -maxdepth 1 -type f | wc -l)" -ge 4
           (cd output && sha256sum * > sha256sums)
 
