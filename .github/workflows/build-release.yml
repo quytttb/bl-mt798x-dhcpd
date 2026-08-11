@@ -33,15 +33,14 @@ jobs:
           set -euo pipefail
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             tag="${{ inputs.tag }}"
-            checkout_ref="$GITHUB_SHA"
           else
             tag="$GITHUB_REF_NAME"
-            checkout_ref="$GITHUB_REF_NAME"
           fi
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Tag must use vMAJOR.MINOR.PATCH: $tag" >&2
             exit 1
           fi
+          checkout_ref="$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
