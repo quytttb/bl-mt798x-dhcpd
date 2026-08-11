@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
@@ -75,7 +75,7 @@ jobs:
           (cd output && sha256sum * > sha256sums)
 
       - name: Upload release assets
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: mt7981-viettel-${{ needs.prepare.outputs.version }}
           path: output/
@@ -89,7 +89,7 @@ jobs:
       contents: write
     steps:
       - name: Download release assets
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: mt7981-viettel-${{ needs.prepare.outputs.version }}
           path: release-assets
@@ -98,7 +98,7 @@ jobs:
         run: find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: MT7981 Viettel ${{ needs.prepare.outputs.version }}
