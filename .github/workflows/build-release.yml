@@ -1,0 +1,113 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag (for example v1.0.0)"
+        required: true
+        type: string
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Resolve tag and version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="$GITHUB_REF_NAME"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must use vMAJOR.MINOR.PATCH: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+  build-viettel:
+    needs: prepare
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Maximize build disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo docker image prune --all --force 2>/dev/null || true
+          df -h /
+
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install $(cat depends/ubuntu-22.04)
+
+      - name: Build release bootloaders
+        run: |
+          make BOARD=viettel_32x6 VERSION=2025 VARIANT=default BUILD_LOG=y
+          make BOARD=viettel_nr3053 VERSION=2025 VARIANT=default BUILD_LOG=y
+          test "$(find output -maxdepth 1 -type f | wc -l)" -ge 4
+          (cd output && sha256sum * > sha256sums)
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: mt7981-viettel-${{ needs.prepare.outputs.version }}
+          path: output/
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    needs: [prepare, build-viettel]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: mt7981-viettel-${{ needs.prepare.outputs.version }}
+          path: release-assets
+
+      - name: List release files
+        run: find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: MT7981 Viettel ${{ needs.prepare.outputs.version }}
+          generate_release_notes: true
+          make_latest: true
+          overwrite_files: true
+          body: |
+            ## MT7981 Viettel ${{ needs.prepare.outputs.version }}
+
+            Bootloader build for Viettel VHT-32X6V1 and SDMC NR3053.
+
+            The release contains the default 2025 FIP and BL2 images for both boards,
+            build logs, and `sha256sums`. Flash only the image for the matching model.
+            Back up the full flash and Factory partition before updating a bootloader.
+          files: release-assets/*

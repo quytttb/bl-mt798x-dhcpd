@@ -165,9 +165,29 @@ Generated files will be in the `output`
 
 For direct `*.sh` usage details, please see [`doc/tools.md`](./document/tools.md).
 
-## Use Actions to build
+## Build with GitHub Actions
 
-You need to fork this repository to your own account, and then you can use Actions to build the binaries. The generated files will be in the `artifacts` or `releases` page.
+You need to fork this repository to your own account before using GitHub Actions.
+
+- **Dev Build** runs automatically after bootloader-related changes are pushed to
+  `main`, or can be started manually from the Actions tab. It builds the default
+  2025 FIP and BL2 images for Viettel VHT-32X6V1 and SDMC NR3053, then retains the
+  artifact for seven days. It never creates a GitHub Release.
+- **Build Release** runs when a tag in the form `vMAJOR.MINOR.PATCH` is pushed, or
+  manually for an existing tag. It checks out that exact tag, builds the same two
+  boards, generates `sha256sums`, and publishes all output files to the matching
+  GitHub Release.
+
+For example, create a release from the current commit with:
+
+```bash
+git tag -a v1.0.0 -m "MT7981 Viettel 1.0.0"
+git push origin v1.0.0
+```
+
+The existing **FIP Build**, **GPT Build**, and **BL2 Build** workflows remain
+available for manual, configurable builds of other boards. Their generated files
+are available from the Actions artifact or release page.
 
 - [x] Build FIP
   - [x] single-board/all/all-mt798x

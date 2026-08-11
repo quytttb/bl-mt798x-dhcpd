@@ -1,0 +1,58 @@
+name: Dev Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Makefile"
+      - "Kconfig"
+      - "build.sh"
+      - "compile_atf.sh"
+      - "depends/**"
+      - "atf-20240117-bacca82a8/**"
+      - "atf-20250711/**"
+      - "uboot-mtk-20250711/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+concurrency:
+  group: dev-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-viettel:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Maximize build disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo docker image prune --all --force 2>/dev/null || true
+          df -h /
+
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install $(cat depends/ubuntu-22.04)
+
+      - name: Build Viettel bootloaders
+        run: |
+          make BOARD=viettel_32x6 VERSION=2025 VARIANT=default BUILD_LOG=y
+          make BOARD=viettel_nr3053 VERSION=2025 VARIANT=default BUILD_LOG=y
+          test "$(find output -maxdepth 1 -type f | wc -l)" -ge 4
+          (cd output && sha256sum * > sha256sums)
+
+      - name: Upload development artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: mt7981-viettel-dev-${{ github.sha }}
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
