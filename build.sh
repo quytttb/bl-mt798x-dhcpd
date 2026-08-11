@@ -17,8 +17,6 @@ warn()    { printf "${YELLOW}[WARN]${NC}  %s\n" "$*"; }
 error()   { printf "${RED}[ERROR]${NC} %s\n" "$*"; }
 step()    { printf "\n${BLUE}=== %s ===${NC}\n" "$*"; }
 
-AUTHOR="Yuzhii"
-
 TOOLCHAIN_ARM=arm-linux-gnueabi-
 TOOLCHAIN_AARCH64=aarch64-linux-gnu-
 
@@ -460,7 +458,9 @@ step "Copying output files..."
 
 mkdir -p "output"
 if [ -f "$ATF_DIR/build/${SOC}/release/fip.bin" ]; then
-	FIP_NAME="fip-${SOC}_${BOARD}_${VERSION}-${AUTHOR}-dhcpd"
+	# Keep artifact names short and stable. Integrity data belongs in sha256sums,
+	# not in every filename.
+	FIP_NAME="fip-${SOC}-${BOARD}-${VERSION}"
 	if [ "$VARIANT" = "ubootmod" ] || [ "$VARIANT" = "UBOOTMOD" ]; then
 		FIP_NAME="${FIP_NAME}-fit"
 	fi
@@ -474,18 +474,15 @@ if [ -f "$ATF_DIR/build/${SOC}/release/fip.bin" ]; then
 		FIP_NAME="${FIP_NAME}-nonmbm"
 	fi
 	if [ "$fixedparts" = "1" ]; then
-		FIP_NAME="${FIP_NAME}-fixed-parts"
+		FIP_NAME="${FIP_NAME}-fixed"
 	fi
 	if [ "$multilayout" = "1" ]; then
-		FIP_NAME="${FIP_NAME}-multi-layout"
+		FIP_NAME="${FIP_NAME}-multi"
 	fi
 	if [ "$FIP_COMPRESS" = "1" ]; then
-		FIP_NAME="${FIP_NAME}-fipc"
+		FIP_NAME="${FIP_NAME}-xz"
 	fi
-	FIP_MD5=$(md5sum "$ATF_DIR/build/${SOC}/release/fip.bin" | awk '{print $1}')
-	FIP_NAME="${FIP_NAME}_md5-${FIP_MD5}"
 	info "fip-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
-	info "fip.bin md5sum: $FIP_MD5"
 	info "fip.bin size: $(stat -c%s "$ATF_DIR/build/${SOC}/release/fip.bin") bytes"
 	cp -f "$ATF_DIR/build/${SOC}/release/fip.bin" "output/${FIP_NAME}.bin"
 	info "Output: output/${FIP_NAME}.bin"
@@ -508,10 +505,7 @@ if grep -Eq "(^_|CONFIG_TARGET_ALL_NO_SEC_BOOT=y)" "$ATF_CFG_PATH"; then
 		if [ "$VARIANT" = "nonmbm" ] || [ "$VARIANT" = "NONMBM" ]; then
 			BL2_NAME="${BL2_NAME}-nonmbm"
 		fi
-		BL2_MD5=$(md5sum "$ATF_DIR/build/${SOC}/release/bl2.img" | awk '{print $1}')
-		BL2_NAME="${BL2_NAME}_md5-${BL2_MD5}"
 		info "bl2-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
-		info "bl2.img md5sum: $BL2_MD5"
 		info "bl2.img size: $(stat -c%s "$ATF_DIR/build/${SOC}/release/bl2.img") bytes"
 		if [ "$COPY_BL2" = "1" ]; then
 			cp -f "$ATF_DIR/build/${SOC}/release/bl2.img" "output/${BL2_NAME}.img"

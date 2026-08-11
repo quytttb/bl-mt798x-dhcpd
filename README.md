@@ -147,7 +147,12 @@ Các tùy chọn khác:
 
 > Không thể đồng thời dùng `MULTI_LAYOUT=1` và `FIXED_MTDPARTS=0`.
 
-File tạo ra nằm trong thư mục `output`. Xem chi tiết cách dùng trực tiếp các script tại [document/tools.md](./document/tools.md).
+File tạo ra nằm trong thư mục `output`. Tên file được rút gọn theo dạng
+`fip-<soc>-<board>-<version>[-variant][-fixed|-multi][-xz].bin` và
+`bl2-<soc>-<board>-<version>[-variant].img`; không chứa tên tác giả hoặc MD5.
+Kiểm tra tính toàn vẹn bằng file `sha256sums` do workflow tạo ra, hoặc tự tạo
+bằng `cd output && sha256sum * > sha256sums`. Xem chi tiết cách dùng trực tiếp
+các script tại [document/tools.md](./document/tools.md).
 
 ## Build bằng GitHub Actions
 
