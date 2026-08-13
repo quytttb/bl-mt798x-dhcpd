@@ -1,0 +1,26 @@
+* -text
+*.patch whitespace=-indent-with-non-tab,-space-before-tab,-tab-in-indent,-trailing-space
+*.dts text eol=lf
+*.dts[io] text eol=lf
+
+# Fork-specific files: always keep fork version while merging upstream.
+.github/workflows/build-release.yml merge=ours
+.github/workflows/dev-build.yml merge=ours
+README.md merge=ours
+atf-20240117-bacca82a8/configs/mt7981_viettel_32x6_defconfig merge=ours
+atf-20240117-bacca82a8/configs/mt7981_viettel_nr3053_defconfig merge=ours
+build.sh merge=ours
+uboot-mtk-20250711/arch/arm/dts/mt7981-viettel-32x6.dts merge=ours
+uboot-mtk-20250711/arch/arm/dts/mt7981-viettel-nr3053.dts merge=ours
+uboot-mtk-20250711/arch/arm/dts/mt7981-viettel_32x6.dts merge=ours
+uboot-mtk-20250711/arch/arm/dts/mt7981-viettel_nr3053.dts merge=ours
+uboot-mtk-20250711/configs-fit/mt7981_viettel_32x6_defconfig merge=ours
+uboot-mtk-20250711/configs-fit/mt7981_viettel_nr3053_defconfig merge=ours
+uboot-mtk-20250711/configs-nonmbm/mt7981_viettel_32x6_defconfig merge=ours
+uboot-mtk-20250711/configs-nonmbm/mt7981_viettel_nr3053_defconfig merge=ours
+uboot-mtk-20250711/configs/mt7981_viettel_32x6_defconfig merge=ours
+uboot-mtk-20250711/configs/mt7981_viettel_nr3053_defconfig merge=ours
+uboot-mtk-20250711/failsafe/Kconfig merge=ours
+uboot-mtk-20250711/failsafe/embedded/fsdata/i18n.js merge=ours
+uboot-mtk-20250711/failsafe/embedded/fsdata/settings.html merge=ours
+uboot-mtk-20250711/failsafe/modules/env.c merge=ours

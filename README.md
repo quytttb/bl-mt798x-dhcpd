@@ -170,6 +170,21 @@ git push origin v1.0.0
 
 Các workflow **FIP Build**, **GPT Build** và **BL2 Build** vẫn dành cho build thủ công có thể tùy biến với các board khác. File tạo ra có ở artifact hoặc release của Actions.
 
+### Đồng bộ upstream
+
+Workflow **Sync Upstream** fetch từ
+[`Yuzhii0718/bl-mt798x-dhcpd:master`](https://github.com/Yuzhii0718/bl-mt798x-dhcpd/tree/master)
+mỗi thứ Hai lúc 10:17 giờ Việt Nam, hoặc có thể chạy thủ công từ tab
+**Actions**. Khi có commit mới, workflow merge vào nhánh
+`automation/sync-upstream` và tạo/cập nhật pull request về `main`; workflow
+không tự merge.
+
+Các board Viettel, workflow build/release, README và các thay đổi failsafe/build
+riêng được khai báo `merge=ours` trong `.gitattributes`, nên luôn giữ phiên bản
+của fork nếu upstream thay đổi cùng file. Vẫn cần review pull request, đặc biệt
+với thay đổi `build.sh`, cấu hình chung hoặc mã failsafe có liên quan. Nếu merge
+conflict ở file không được bảo vệ, hãy giải quyết trên nhánh sync rồi push lại.
+
 - [x] Build FIP
   - [x] Một board / tất cả board / tất cả board MT798x
   - [x] Phiên bản `2025`/`SP1`/`SP2`/`all`
