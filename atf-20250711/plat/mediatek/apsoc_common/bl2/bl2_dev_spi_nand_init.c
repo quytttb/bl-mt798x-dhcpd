@@ -10,27 +10,45 @@
 #include <mtk_spi.h>
 #include "bl2_plat_setup.h"
 
+#pragma weak mtk_plat_switch_qspi_if
+int mtk_plat_switch_qspi_if(void)
+{
+	return -ENOTSUP;
+}
+
 int mtk_plat_nand_setup(size_t *page_size, size_t *block_size, uint64_t *size)
 {
 	struct nand_device *nand_dev;
 	unsigned long long chip_size;
 	unsigned int erase_size;
-	uint32_t src_clk;
 	int ret;
-
-	src_clk = mtk_plat_get_qspi_src_clk();
 
 	mtk_qspi_setup_buffer((void *)QSPI_BUF_OFFSET);
 
-	ret = mtk_qspi_init(src_clk);
-	if (ret) {
-		ERROR("mtk_qspi_init() failed with %d\n", ret);
-		return ret;
-	}
+	while (true) {
+		ret = mtk_plat_qspi_init();
+		if (ret) {
+			ERROR("Failed to initialize SPI controller, error %d\n",
+			      ret);
+			return ret;
+		}
 
-	ret = spi_nand_init(&chip_size, &erase_size);
-	if (ret) {
-		ERROR("spi_nand_init() failed with %d\n", ret);
+		ret = spi_nand_init(&chip_size, &erase_size);
+		if (!ret)
+			break;
+
+		if (ret == -ENODEV) {
+			ret = mtk_plat_switch_qspi_if();
+			if (!ret)
+				continue;
+
+			ERROR("No SPI-NAND flash present\n");
+			return ret;
+		}
+
+		if (ret != -ENOENT)
+			ERROR("Failed to initialize SPI-NAND, error %d\n", ret);
+
 		return ret;
 	}
 

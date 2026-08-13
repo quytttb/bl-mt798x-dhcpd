@@ -489,6 +489,8 @@ endchoice
 
 menu "Advanced boot device configuration"
 
+source "plat/mediatek/mt7987/bl2/Config.in"
+
 config _BROM_NAND_HEADER_LEGACY
 	bool
 

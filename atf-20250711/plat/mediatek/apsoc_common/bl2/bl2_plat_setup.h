@@ -63,6 +63,6 @@ void mtk_plat_fip_location(size_t *fip_off, size_t *fip_size);
 struct mtk_snand_platdata;
 const struct mtk_snand_platdata *mtk_plat_get_snfi_platdata(void);
 
-uint32_t mtk_plat_get_qspi_src_clk(void);
+int mtk_plat_qspi_init(void);
 
 #endif /* BL2_PLAT_SETUP_H */

@@ -57,6 +57,8 @@ struct spi_device {
 #define ERR_SPI_TIMEOUT		(-2)
 #define ERR_SPI_PARAM		(-3)
 
+struct spi_mem_op;
+
 int mtk_spi_init(struct spi_device *spi);
 
 int mtk_spi_fifo_transfer(struct spi_device *spi,
@@ -73,5 +75,6 @@ int mtk_spi_mem_exec_op(struct spi_device *spi,
 
 void mtk_qspi_setup_buffer(void *buf);
 int mtk_qspi_init(uint32_t src_clk_hz);
+int mtk_qspi_init_by_path(const char *path, uint32_t src_clk_hz);
 
 #endif
