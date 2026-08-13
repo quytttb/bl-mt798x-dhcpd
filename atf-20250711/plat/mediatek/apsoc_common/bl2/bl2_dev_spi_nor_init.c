@@ -13,16 +13,13 @@
 int mtk_plat_nor_setup(void)
 {
 	unsigned long long size;
-	uint32_t src_clk;
 	int ret;
-
-	src_clk = mtk_plat_get_qspi_src_clk();
 
 	mtk_qspi_setup_buffer((void *)QSPI_BUF_OFFSET);
 
-	ret = mtk_qspi_init(src_clk);
+	ret = mtk_plat_qspi_init();
 	if (ret) {
-		ERROR("mtk_qspi_init() failed with %d\n", ret);
+		ERROR("Failed to initialize SPI controller, error %d\n", ret);
 		return ret;
 	}
 

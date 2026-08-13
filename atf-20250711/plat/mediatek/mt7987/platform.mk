@@ -56,11 +56,12 @@ include $(APSOC_COMMON)/bl2/bl2_image_post.mk
 # Make sure make command parameter reflects on .o files immediately
 include make_helpers/dep.mk
 
-$(call GEN_DEP_RULES,bl2,emicfg bl2_boot_ram bl2_boot_nand_nmbm bl2_dev_mmc bl2_plat_init bl2_plat_setup mt7987_gpio dtb)
+$(call GEN_DEP_RULES,bl2,emicfg bl2_boot_ram bl2_boot_nand_nmbm bl2_dev_spi_nand bl2_dev_mmc bl2_plat_init bl2_plat_setup mt7987_gpio dtb)
 $(call MAKE_DEP,bl2,emicfg,DDR4_4BG_MODE DRAM_DEBUG_LOG DDR3_FREQ_2133 DDR3_FREQ_1866 DDR4_FREQ_3200 DDR4_FREQ_2666)
-$(call MAKE_DEP,bl2,bl2_plat_init,BL2_COMPRESS SPIM_CTRL)
-$(call MAKE_DEP,bl2,bl2_plat_setup,BOOT_DEVICE TRUSTED_BOARD_BOOT BL32_TZRAM_BASE BL32_TZRAM_SIZE BL32_LOAD_OFFSET SPIM_CTRL)
+$(call MAKE_DEP,bl2,bl2_plat_init,BL2_COMPRESS)
+$(call MAKE_DEP,bl2,bl2_plat_setup,BOOT_DEVICE TRUSTED_BOARD_BOOT BL32_TZRAM_BASE BL32_TZRAM_SIZE BL32_LOAD_OFFSET)
 $(call MAKE_DEP,bl2,bl2_dev_mmc,BOOT_DEVICE)
+$(call MAKE_DEP,bl2,bl2_dev_spi_nand,BOOT_DEVICE SPIM_NAND_NO_RETRY SPIM_NAND_PREFER_SPI2)
 $(call MAKE_DEP,bl2,bl2_boot_ram,RAM_BOOT_DEBUGGER_HOOK RAM_BOOT_UART_DL)
 $(call MAKE_DEP,bl2,bl2_boot_nand_nmbm,NMBM_MAX_RATIO NMBM_MAX_RESERVED_BLOCKS NMBM_DEFAULT_LOG_LEVEL)
 $(call MAKE_DEP,bl2,mt7987_gpio,ENABLE_JTAG)

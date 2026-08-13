@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# Copyright (c) 2025 Daniel Golle <daniel@makrotopia.org>
 # Copyright (c) 2026 Yuzhii0718 <admin@yuzhii0718.eu.org>
 #
 # MT7987 platform-specific configurations
@@ -30,24 +29,5 @@ config I2P5G_PHY_MODE
 	int
 	default 0 if _I2P5G_PHY_1P2L
 	default 1 if _I2P5G_PHY_2P1L
-
-choice
-	prompt "SPI controller"
-	depends on (_BOOT_DEVICE_SPIM_NAND || _BOOT_DEVICE_SPI_NOR)
-	default _SPIM_CTRL_0 if _BOOT_DEVICE_SPIM_NAND
-	default _SPIM_CTRL_2 if _BOOT_DEVICE_SPI_NOR
-
-	config _SPIM_CTRL_0
-		bool "0"
-
-	config _SPIM_CTRL_2
-		bool "2"
-
-endchoice
-
-config SPIM_CTRL
-	int
-	default 0 if _SPIM_CTRL_0
-	default 2 if _SPIM_CTRL_2
 
 endif # _PLAT_MT7987

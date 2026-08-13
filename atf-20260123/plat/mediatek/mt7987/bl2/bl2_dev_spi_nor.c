@@ -8,7 +8,7 @@
 #include <boot_spi.h>
 #include <mtk_spi.h>
 
-#define FIP_BASE			0x180000
+#define FIP_BASE			0x100000
 #define FIP_SIZE			0x80000
 
 #define MTK_QSPI_SRC_CLK		CB_MPLL_D2

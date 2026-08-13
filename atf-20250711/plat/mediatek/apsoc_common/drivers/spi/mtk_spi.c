@@ -953,26 +953,22 @@ void mtk_qspi_setup_buffer(void *buf)
 	mem_malloced = true;
 }
 
-int mtk_qspi_init(uint32_t src_clk_hz)
+static int mtk_qspi_init_node(int qspi_node, uint32_t src_clk_hz)
 {
-	int qspi_node;
 	int qspi_subnode = 0;
 	const fdt32_t *cuint;
 
-	qspi_node = fdt_node_offset_by_compatible(fdt, -1, DT_QSPI_COMPAT_MTK);
-	if (qspi_node < 0) {
-		ERROR("%s find qspi_node fail\n", __func__);
-		return -FDT_ERR_NOTFOUND;
+	memset(&g_mdata, 0, sizeof(struct mtk_spi));
+	memset(&spidev, 0, sizeof(spidev));
+	memset(&mtk_default_chip_info, 0, sizeof(mtk_default_chip_info));
+
+	cuint = fdt_getprop(fdt, qspi_node, "reg", NULL);
+	if (!cuint) {
+		ERROR("\"reg\" node not found in spi node\n");
+		return -ENODEV;
 	}
 
-	memset(&g_mdata, 0, sizeof(struct mtk_spi));
-	while (qspi_node != -FDT_ERR_NOTFOUND) {
-		cuint = fdt_getprop(fdt, qspi_node, "reg", NULL);
-		if (cuint) {
-			g_mdata.base = fdt32_to_cpu(*cuint);
-			break;
-		}
-	}
+	g_mdata.base = fdt32_to_cpu(*cuint);
 
 	spidev.chip_config = &mtk_default_chip_info;
 	fdt_for_each_subnode(qspi_subnode, fdt, qspi_node) {
@@ -1007,4 +1003,30 @@ int mtk_qspi_init(uint32_t src_clk_hz)
 	mtk_spi_log("SPI_RXDMA_BUF=0x%x\n" ,SPI_RXDMA_BUF);
 
 	return spi_mem_init_slave(fdt, qspi_node, &mtk_qspi_bus_ops);
+}
+
+int mtk_qspi_init(uint32_t src_clk_hz)
+{
+	int qspi_node;
+
+	qspi_node = fdt_node_offset_by_compatible(fdt, -1, DT_QSPI_COMPAT_MTK);
+	if (qspi_node < 0) {
+		ERROR("Failed to get default qspi node\n");
+		return -ENODEV;
+	}
+
+	return mtk_qspi_init_node(qspi_node, src_clk_hz);
+}
+
+int mtk_qspi_init_by_path(const char *path, uint32_t src_clk_hz)
+{
+	int qspi_node;
+
+	qspi_node = fdt_path_offset(fdt, path);
+	if (qspi_node < 0) {
+		ERROR("Failed to get qspi node '%s'\n", path);
+		return -ENODEV;
+	}
+
+	return mtk_qspi_init_node(qspi_node, src_clk_hz);
 }

@@ -1,46 +1,38 @@
-#!/bin/sh
-# ============================================================================
+#!/bin/bash
+#===============================================================================
 # mtmips.sh - Build U-Boot for MediaTek MT7620/MT7621/MT7628/MT7688 (MIPS)
 #
-# Usage:
-#   SOC=<mt7620|mt7621|mt7628|mt7688> BOARD=<board_name> [VERSION=2025] ./mtmips.sh
-#
-# Examples:
-#   SOC=mt7620 BOARD=rfb              ./mtmips.sh
-#   SOC=mt7621 BOARD=rfb              ./mtmips.sh
-#   SOC=mt7628 BOARD=rfb              ./mtmips.sh
-#   SOC=mt7688 BOARD=rfb              ./mtmips.sh
-#
-# Note: mt7628 and mt7688 share the same mt76x8 toolchain.
-#
-# Description:
-#   This script builds U-Boot for MediaTek MIPS-based SoCs (MT7620, MT7621,
-#   MT7628, MT7688) using the OpenWrt toolchain (mipsel-openwrt-linux-).
-#   If the toolchain is not found locally, the script offers to download it
-#   automatically from the OpenWrt release archives. The toolchain is placed
-#   in the same directory as the U-Boot source tree.
-#
-# Environment variables:
-#   SOC           Target SoC (required: mt7620, mt7621, mt7628, mt7688)
-#   BOARD         Target board name (required)
-#   VERSION       U-Boot version to build (default: 2025 → uboot-mtk-20250711)
-#   TOOLCHAIN     Cross-compiler prefix (auto-detected if empty)
-#   JOBS          Parallel make jobs (default: nproc)
-#   STAGING_DIR   Staging directory (passed to make)
-#
-# Output:
-#   output_<soc>/<soc>-u-boot-<board>-<version>_md5-<hash>.bin
-# ============================================================================
+# Usage: SOC=<soc> BOARD=<board> [VERSION=2025] ./mtmips.sh
+#        ./mtmips.sh --help
+#===============================================================================
 
 set -e
 
-VERSION=${VERSION:-2025}
-SOC="${SOC:-mt7628}"
-BOARD="${BOARD:-rfb}"
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# ---------------------------------------------------------------------------
+info()    { echo -e "${GREEN}[INFO]${NC}  $*"; }
+warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+error()   { echo -e "${RED}[ERROR]${NC} $*"; }
+step()    { echo -e "\n${BLUE}=== $* ===${NC}"; }
+die()     { error "$*"; exit 1; }
+
+# User-configurable variables
+VERSION="${VERSION:-2025}"
+
+# Output
+OUTPUT_DIR="output_mtmips"
+
+# URL of the prebuilt OpenWrt toolchain (can be overridden by env)
+TOOLCHAIN_URL="${TOOLCHAIN_URL:-}"
+
+#------------------------------------------------------------------------------
 # --help / -h
-# ---------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 show_help() {
 	cat <<'EOF'
 Usage: SOC=<mt7620|mt7621|mt7628|mt7688> BOARD=<board_name> [VERSION=2025] ./mtmips.sh
@@ -54,14 +46,13 @@ Required:
   BOARD=<board>           Target board name (matches defconfig: ${SOC}_${BOARD}_defconfig)
 
 Options:
-  VERSION=2025    U-Boot version (default: 2025 → uboot-mtk-20250711)
+  VERSION=2025    U-Boot version (default: 2025 -> uboot-mtk-20250711)
   TOOLCHAIN=...   Cross-compiler prefix (auto-detected from ./openwrt*/toolchain-mipsel*)
   JOBS=<n>        Parallel make jobs (default: nproc)
   STAGING_DIR=... Staging directory (auto-detected from TOOLCHAIN)
 
 Examples:
   SOC=mt7620 BOARD=rfb                     ./mtmips.sh
-  SOC=mt7621 BOARD=rfb                     ./mtmips.sh
   SOC=mt7621 BOARD=rfb                     ./mtmips.sh
   SOC=mt7628 BOARD=rfb                     ./mtmips.sh
   SOC=mt7688 BOARD=rfb                     ./mtmips.sh
@@ -75,17 +66,20 @@ case "${1:-}" in
 		;;
 esac
 
-# ---------------------------------------------------------------------------
-# Validate SOC
-# ---------------------------------------------------------------------------
-if [ -z "$SOC" ]; then
+#------------------------------------------------------------------------------
+# SOC parameter check
+#------------------------------------------------------------------------------
+SOC="${SOC,,}" # Transform to lowercase
+
+if [ -z "${SOC}" ]; then
+	error "SOC is required."
 	echo "Usage: SOC=<mt7620|mt7621|mt7628|mt7688> BOARD=<board_name> [VERSION=2025] $0"
 	echo "Try '$0 --help' for more information."
 	exit 1
 fi
 
 # Map SOC to OpenWrt toolchain target (mt7628/mt7688 both use mt76x8 toolchain)
-case "$SOC" in
+case "${SOC}" in
 	mt7620)
 		TOOLCHAIN_SOC="mt7620"
 		TOOLCHAIN_URL_NAME="ramips-mt7620"
@@ -102,148 +96,234 @@ case "$SOC" in
 		TOOLCHAIN_PATTERN="openwrt*mt76x8*"
 		;;
 	*)
-		echo "Error: Unsupported SOC='$SOC'. Valid values: mt7620, mt7621, mt7628, mt7688"
+		error "Unsupported SOC='${SOC}'. Valid values: mt7620, mt7621, mt7628, mt7688"
 		exit 1
 		;;
 esac
 
-if [ -z "$BOARD" ]; then
+SOC_UPPER="${SOC^^}"
+
+if [ -z "${BOARD}" ]; then
+	error "BOARD is required."
 	echo "Usage: SOC=${SOC} BOARD=<board_name> [VERSION=2025] $0"
 	echo "Try '$0 --help' for more information."
 	exit 1
 fi
 
-# ---------------------------------------------------------------------------
-# VERSION-based U-Boot directory selection
-# ---------------------------------------------------------------------------
-if [ "$VERSION" = "2025" ]; then
-	UBOOT_DIR=uboot-mtk-20250711
-else
-	echo "Error: Unsupported VERSION='$VERSION'. Please specify VERSION=2025."
-	exit 1
+#------------------------------------------------------------------------------
+# Resolve VERSION -> UBOOT_DIR
+#------------------------------------------------------------------------------
+case "${VERSION}" in
+	2025)
+		UBOOT_DIR="uboot-mtk-20250711"
+		;;
+	*)
+		error "Unsupported VERSION='${VERSION}'. Please specify VERSION=2025."
+		exit 1
+		;;
+esac
+
+# Default toolchain URL (set after SOC is known)
+if [ -z "${TOOLCHAIN_URL}" ]; then
+	TOOLCHAIN_URL="https://downloads.openwrt.org/releases/25.12.5/targets/ramips/${TOOLCHAIN_SOC}/openwrt-toolchain-25.12.5-${TOOLCHAIN_URL_NAME}_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
 fi
 
-OUTPUT_DIR="output_mtmips"
-
-die()
-{
-	echo "Error: $*"
-	exit 1
-}
-
-# Read a CONFIG_ value from the generated .config
-get_config()
-{
-	grep -oP "^CONFIG_$1=\K.*" "$UBOOT_DIR/.config" 2>/dev/null || true
-}
-
-# URL of the prebuilt OpenWrt toolchain (can be overridden by env)
-TOOLCHAIN_URL="${TOOLCHAIN_URL:-https://downloads.openwrt.org/releases/25.12.5/targets/ramips/${TOOLCHAIN_SOC}/openwrt-toolchain-25.12.5-${TOOLCHAIN_URL_NAME}_gcc-14.3.0_musl.Linux-x86_64.tar.zst}"
-
-# ---------------------------------------------------------------------------
-# Auto-detect or download toolchain (same directory as U-Boot source)
-# ---------------------------------------------------------------------------
-TOOLCHAIN_BIN=$(cd ./${TOOLCHAIN_PATTERN}/toolchain-mipsel*/bin 2>/dev/null && pwd || true)
-if [ -z "$TOOLCHAIN_BIN" ]; then
-	echo "Toolchain not found in current directory."
-	echo "Looking for: ./${TOOLCHAIN_PATTERN}/toolchain-mipsel*/bin"
-	read -p "Download it now? [Y/n] " dlcc
-	dlcc=${dlcc:-Y}
-	case "$dlcc" in
-		[Yy]* )
-			echo "Downloading toolchain from: $TOOLCHAIN_URL"
-			if command -v wget >/dev/null 2>&1; then
-				wget -O - "$TOOLCHAIN_URL" | tar --zstd -xf - || die "Toolchain download failed."
-			elif command -v curl >/dev/null 2>&1; then
-				curl -L "$TOOLCHAIN_URL" | tar --zstd -xf - || die "Toolchain download failed."
-			else
-				die "Neither wget nor curl found. Install one or download manually: $TOOLCHAIN_URL"
-			fi
-			TOOLCHAIN_BIN=$(cd ./${TOOLCHAIN_PATTERN}/toolchain-mipsel*/bin 2>/dev/null && pwd || true)
-			[ -n "$TOOLCHAIN_BIN" ] || die "Toolchain not found after extraction."
-			;;
-		* )
-			die "Toolchain required. Set TOOLCHAIN=... or place ${TOOLCHAIN_PATTERN}/toolchain-mipsel*/ in current directory."
-			;;
-	esac
-fi
-
-TOOLCHAIN="${TOOLCHAIN_BIN}/mipsel-openwrt-linux-"
-Staging="${TOOLCHAIN_BIN%/bin}"
-Staging="${Staging%/toolchain-*}"
-
-# ---------------------------------------------------------------------------
-# Build config
-# ---------------------------------------------------------------------------
+# Config
 UBOOT_CFG="${SOC}_${BOARD}_defconfig"
 
-# ---------------------------------------------------------------------------
-# Environment checks
-# ---------------------------------------------------------------------------
-echo "======================================================================"
-echo "MTMIPS U-Boot Build (${SOC})"
-echo "======================================================================"
+# Helpers
+get_config() {
+	grep -oP "^CONFIG_$1=\K.*" "${UBOOT_DIR}/.config" 2>/dev/null || true
+}
 
-command -v python3 >/dev/null 2>&1 || die "Python 3 is not installed."
-command -v "${TOOLCHAIN}gcc" >/dev/null 2>&1 || die "${TOOLCHAIN}gcc not found!"
+#------------------------------------------------------------------------------
+# Auto-detect or Download Toolchain
+#------------------------------------------------------------------------------
+resolve_toolchain() {
+	step "Resolve Toolchain [${SOC_UPPER}]"
 
-[ -d "$UBOOT_DIR" ] || die "U-Boot directory '$UBOOT_DIR' not found!"
-[ -f "$UBOOT_DIR/configs/$UBOOT_CFG" ] || die "Defconfig not found: $UBOOT_DIR/configs/$UBOOT_CFG"
-
-echo "VERSION:       $VERSION"
-echo "SOC:           $SOC"
-echo "BOARD:         $BOARD"
-echo "U-Boot Dir:    $UBOOT_DIR"
-echo "Toolchain:     $TOOLCHAIN"
-echo "STAGING_DIR:   $Staging"
-echo "Defconfig:     $UBOOT_CFG"
-
-# ---------------------------------------------------------------------------
-# Parallel jobs
-# ---------------------------------------------------------------------------
-if [ -z "$JOBS" ]; then
-	if command -v nproc >/dev/null 2>&1; then
-		JOBS=$(nproc)
-	else
-		JOBS=1
+	TOOLCHAIN_BIN=$(cd ./${TOOLCHAIN_PATTERN}/toolchain-mipsel*/bin 2>/dev/null && pwd || true)
+	if [ -z "${TOOLCHAIN_BIN}" ]; then
+		warn "Toolchain not found in current directory."
+		info "Looking for: ./${TOOLCHAIN_PATTERN}/toolchain-mipsel*/bin"
+		read -p "Download it now? [Y/n] " dlcc
+		dlcc="${dlcc:-Y}"
+		case "${dlcc}" in
+			[Yy]*)
+				info "Downloading toolchain from: ${TOOLCHAIN_URL}"
+				if command -v wget &>/dev/null; then
+					wget -O - "${TOOLCHAIN_URL}" | tar --zstd -xf - || die "Toolchain download failed."
+				elif command -v curl &>/dev/null; then
+					curl -L "${TOOLCHAIN_URL}" | tar --zstd -xf - || die "Toolchain download failed."
+				else
+					die "Neither wget nor curl found. Install one or download manually: ${TOOLCHAIN_URL}"
+				fi
+				TOOLCHAIN_BIN=$(cd ./${TOOLCHAIN_PATTERN}/toolchain-mipsel*/bin 2>/dev/null && pwd || true)
+				[ -n "${TOOLCHAIN_BIN}" ] || die "Toolchain not found after extraction."
+				;;
+			*)
+				die "Toolchain required. Set TOOLCHAIN=... or place ${TOOLCHAIN_PATTERN}/toolchain-mipsel*/ in current directory."
+				;;
+		esac
 	fi
-fi
 
-# ---------------------------------------------------------------------------
-# Build
-# ---------------------------------------------------------------------------
-echo "======================================================================"
-echo "Building U-Boot..."
-echo "======================================================================"
+	TOOLCHAIN="${TOOLCHAIN_BIN}/mipsel-openwrt-linux-"
+	Staging="${TOOLCHAIN_BIN%/bin}"
+	Staging="${Staging%/toolchain-*}"
 
-rm -f "$UBOOT_DIR/u-boot.bin" "$UBOOT_DIR/u-boot-with-spl.bin"
-cp -f "$UBOOT_DIR/configs/$UBOOT_CFG" "$UBOOT_DIR/.config"
-make -C "$UBOOT_DIR" olddefconfig
-make -C "$UBOOT_DIR" clean
-make -C "$UBOOT_DIR" CROSS_COMPILE="${TOOLCHAIN}" STAGING_DIR="${Staging}" -j "$JOBS" all
+	info "Toolchain: ${TOOLCHAIN}"
+	info "STAGING_DIR: ${Staging}"
+}
 
-# Determine output image: respect CONFIG_BUILD_TARGET (e.g. u-boot-with-spl.bin for SPL builds)
-UBOOT_BIN=$(get_config "BUILD_TARGET")
-UBOOT_BIN=$(echo "$UBOOT_BIN" | tr -d '"')
-[ -n "$UBOOT_BIN" ] || UBOOT_BIN="u-boot.bin"
+#------------------------------------------------------------------------------
+# Environment Check
+#------------------------------------------------------------------------------
+check_environment() {
+	step "Environment Check [SOC: ${SOC_UPPER}] [BOARD: ${BOARD}]"
 
-[ -f "$UBOOT_DIR/$UBOOT_BIN" ] || die "U-Boot build failed! $UBOOT_BIN not generated."
-echo "U-Boot build done! (image: $UBOOT_BIN)"
+	if ! command -v python3 &>/dev/null; then
+		error "Python 3 is not installed."
+		error "Please install: sudo apt install -y python3"
+		exit 1
+	fi
+	info "Python3: $(python3 --version 2>&1)"
 
-# ---------------------------------------------------------------------------
-# Output
-# ---------------------------------------------------------------------------
-echo "======================================================================"
-echo "Copying output files..."
-echo "======================================================================"
+	if ! command -v "${TOOLCHAIN}gcc" &>/dev/null; then
+		error "${TOOLCHAIN}gcc not found!"
+		exit 1
+	fi
+	info "Toolchain: $(${TOOLCHAIN}gcc --version | head -1)"
 
-mkdir -p "$OUTPUT_DIR"
+	if [ ! -d "${UBOOT_DIR}" ]; then
+		error "U-Boot directory '${UBOOT_DIR}' not found!"
+		exit 1
+	fi
+	info "U-Boot Dir: ${UBOOT_DIR}"
 
-MD5SUM=$(md5sum "$UBOOT_DIR/$UBOOT_BIN" | awk '{print $1}')
-echo "$UBOOT_BIN md5: $MD5SUM"
+	if [ ! -f "${UBOOT_DIR}/configs/${UBOOT_CFG}" ]; then
+		error "Defconfig not found: ${UBOOT_DIR}/configs/${UBOOT_CFG}"
+		exit 1
+	fi
+	info "Defconfig: ${UBOOT_CFG}"
 
-UBOOTNAME="${SOC}-u-boot-${BOARD}-${VERSION}_md5-${MD5SUM}.bin"
-cp -f "$UBOOT_DIR/$UBOOT_BIN" "$OUTPUT_DIR/$UBOOTNAME"
+	# Parallel jobs
+	if [ -z "${JOBS}" ]; then
+		if command -v nproc &>/dev/null; then
+			JOBS=$(nproc)
+		else
+			JOBS=1
+		fi
+	fi
+	info "JOBS: ${JOBS}"
 
-echo "${SOC}-u-boot-${BOARD}-${VERSION} build done"
-echo "Output: $OUTPUT_DIR/$UBOOTNAME"
+	info "Environment Check passed"
+}
+
+#------------------------------------------------------------------------------
+# Print Configuration
+#------------------------------------------------------------------------------
+print_configuration() {
+	step "Configuration"
+	info "VERSION:     ${VERSION}"
+	info "SOC:         ${SOC}"
+	info "BOARD:       ${BOARD}"
+	info "U-Boot Dir:  ${UBOOT_DIR}"
+	info "Toolchain:   ${TOOLCHAIN}"
+	info "STAGING_DIR: ${Staging}"
+	info "Defconfig:   ${UBOOT_CFG}"
+}
+
+#------------------------------------------------------------------------------
+# Build U-Boot
+#------------------------------------------------------------------------------
+build_uboot() {
+	step "Build U-Boot [${SOC_UPPER}]"
+
+	rm -f "${UBOOT_DIR}/u-boot.bin" "${UBOOT_DIR}/u-boot-with-spl.bin"
+	cp -f "${UBOOT_DIR}/configs/${UBOOT_CFG}" "${UBOOT_DIR}/.config"
+
+	make -C "${UBOOT_DIR}" olddefconfig
+	make -C "${UBOOT_DIR}" clean
+	make -C "${UBOOT_DIR}" CROSS_COMPILE="${TOOLCHAIN}" STAGING_DIR="${Staging}" -j "${JOBS}" all
+
+	# Determine output image: respect CONFIG_BUILD_TARGET (e.g. u-boot-with-spl.bin for SPL builds)
+	local uboot_bin
+	uboot_bin=$(get_config "BUILD_TARGET")
+	uboot_bin=$(echo "${uboot_bin}" | tr -d '"')
+	[ -n "${uboot_bin}" ] || uboot_bin="u-boot.bin"
+
+	if [ ! -f "${UBOOT_DIR}/${uboot_bin}" ]; then
+		error "U-Boot build failed! ${uboot_bin} not generated."
+		exit 1
+	fi
+	info "U-Boot build done! (image: ${uboot_bin}, $(stat -c%s "${UBOOT_DIR}/${uboot_bin}") bytes)"
+
+	UBOOT_BIN="${uboot_bin}"
+}
+
+#------------------------------------------------------------------------------
+# Copy Output Files
+#------------------------------------------------------------------------------
+copy_outputs() {
+	step "Copy Output Files"
+
+	mkdir -p "${OUTPUT_DIR}"
+
+	local md5sum
+	md5sum=$(md5sum "${UBOOT_DIR}/${UBOOT_BIN}" | awk '{print $1}')
+	info "${UBOOT_BIN} md5: ${md5sum}"
+
+	local ubootname="${SOC}-u-boot-${BOARD}-${VERSION}_md5-${md5sum}.bin"
+	cp -f "${UBOOT_DIR}/${UBOOT_BIN}" "${OUTPUT_DIR}/${ubootname}"
+
+	info "${SOC}-u-boot-${BOARD}-${VERSION} build done"
+	info "Output: ${OUTPUT_DIR}/${ubootname}"
+
+	UBOOT_OUTPUT="${OUTPUT_DIR}/${ubootname}"
+}
+
+#------------------------------------------------------------------------------
+# Print Summary
+#------------------------------------------------------------------------------
+print_summary() {
+	echo ""
+	echo "==========================================================================="
+	echo -e "  ${GREEN}${SOC_UPPER} ${BOARD} U-Boot build completed!${NC}"
+	echo "==========================================================================="
+	echo ""
+	echo "  Output directory: ${OUTPUT_DIR}/"
+	echo ""
+
+	local size
+	if [ -n "${UBOOT_OUTPUT}" ] && [ -f "${UBOOT_OUTPUT}" ]; then
+		size=$(stat -c%s "${UBOOT_OUTPUT}")
+		printf "    %-50s  %10s bytes\n" "${UBOOT_OUTPUT}" "${size}"
+	fi
+	echo ""
+	echo "==========================================================================="
+}
+
+#------------------------------------------------------------------------------
+# Main
+#------------------------------------------------------------------------------
+main() {
+	echo ""
+	echo "==========================================================================="
+	echo "  MTMIPS U-Boot build script"
+	echo "  SOC:      ${SOC_UPPER}"
+	echo "  BOARD:    ${BOARD}"
+	echo "  VERSION:  ${VERSION}"
+	echo "  U-Boot:   ${UBOOT_DIR}"
+	echo "  Output:   ${OUTPUT_DIR}"
+	echo "==========================================================================="
+
+	resolve_toolchain
+	check_environment
+	print_configuration
+	build_uboot
+	copy_outputs
+
+	print_summary
+}
+
+main "$@"
