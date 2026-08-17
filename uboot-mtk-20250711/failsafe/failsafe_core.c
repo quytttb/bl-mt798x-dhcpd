@@ -37,7 +37,7 @@
 #include <failsafe/fw_type.h>
 
 #include "../board/mediatek/common/boot_helper.h"
-#include "failsafe_internal.h"
+#include <failsafe/internal.h>
 
 /* ------------------------------------------------------------------ */
 /*  Core state (local to the main loop)                                */
@@ -136,27 +136,15 @@ int start_web_failsafe(void)
 
 #ifdef CONFIG_MTK_TELNETD
 	if (IS_ENABLED(CONFIG_MTK_TELNETD)) {
-		const char *enable_str = env_get("telnet_enable");
-		const char *port_str = env_get("telnet_port");
-		unsigned long port = 23;
+		const char *enable_str = env_get("telnetd_enable");
 		bool enable = true;
 
-		/* Check if telnet is explicitly disabled */
-		if (enable_str) {
-			if (!strcmp(enable_str, "0") || !strcasecmp(enable_str, "false") ||
-			    !strcasecmp(enable_str, "no") || !strcasecmp(enable_str, "off")) {
-				enable = false;
-			}
-		}
+		/* Explicitly disabled when telnetd_enable is "0" */
+		if (enable_str && !strcmp(enable_str, "0"))
+			enable = false;
 
-		if (enable) {
-			if (port_str) {
-				port = simple_strtoul(port_str, NULL, 10);
-				if (port < 1 || port > 65535)
-					port = 23;
-			}
-			mtk_telnetd_start((u16)port);
-		}
+		if (enable)
+			mtk_telnetd_start(mtk_telnetd_env_port("telnet_port", 23));
 	}
 #endif
 

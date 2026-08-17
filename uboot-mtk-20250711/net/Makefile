@@ -45,6 +45,7 @@ obj-$(CONFIG_WGET) += wget.o
 obj-$(CONFIG_MTK_TCP)  += mtk_tcp.o
 obj-$(CONFIG_MTK_HTTPD)  += mtk_httpd.o
 obj-$(CONFIG_MTK_DHCPD)  += mtk_dhcpd.o
+obj-$(CONFIG_MTK_NET_ABORT)  += net_abort.o
 obj-$(CONFIG_MTK_DNSD)  += mtk_dnsd.o
 obj-$(CONFIG_MTK_TELNETD)  += mtk_telnetd.o
 CFLAGS_mtk_telnetd.o += -DWEBUI_FAILSAFE_GIT_HASH=\"$(WEBUI_FAILSAFE_GIT_HASH)\"

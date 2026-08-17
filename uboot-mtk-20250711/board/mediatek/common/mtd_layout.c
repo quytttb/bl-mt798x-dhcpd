@@ -193,7 +193,14 @@ void board_mtdparts_default(const char **mtdids, const char **mtdparts)
 	log_mtd_layout_state(layout_label, ids, parts);
 #endif
 
-	env_set("bootargs", cmdline);
+	if (IS_ENABLED(CONFIG_MTK_FDT_BOOTARGS_FALLBACK)) {
+		/* Only set bootargs if layout explicitly defines cmdline,
+		 * otherwise preserve existing bootargs (e.g. from official FDT) */
+		if (cmdline)
+			env_set("bootargs", cmdline);
+	} else {
+		env_set("bootargs", cmdline);
+	}
 	env_set(MTD_LAYOUT_ENV, layout_label);
 	env_set(MTD_LAYOUT_ENV_LEGACY, layout_label);
 	env_set("ubi_boot_part", boot_part);

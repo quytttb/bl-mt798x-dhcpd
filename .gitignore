@@ -51,3 +51,4 @@ node_modules/
 u-boot-*/
 mtk-*/
 *.zip
+atf-*/

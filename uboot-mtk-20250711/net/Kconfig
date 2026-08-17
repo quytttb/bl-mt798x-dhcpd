@@ -221,10 +221,10 @@ config IPV6
 	  address and find it, it will force using IPv6 in the network stack.
 
 config MTK_TCP
-	bool
+	bool "Enable Mediatek TCP framework"
 	default n
 	help
-	  Enable mediatek tcp framework that allows some customized features.
+	  Enable Mediatek TCP framework that allows some customized features.
 
 config MTK_TCP_VERBOSE
 	bool "Enable verbose logging for MTK TCP stack"
@@ -236,11 +236,11 @@ config MTK_TCP_VERBOSE
 	  Set the variable to "1", "true", "yes", or "on" to enable logging.
 
 config MTK_HTTPD
-	bool
+	bool "Enable Mediatek HTTPD framework"
 	default n
 	depends on MTK_TCP
 	help
-	  Enable mediatek httpd framework that allows some customized features.
+	  Enable Mediatek HTTPD framework that allows some customized features.
 
 config MTK_TELNETD
 	bool "Minimal telnet server for MediaTek web failsafe"
@@ -296,9 +296,27 @@ config MTK_DNSD
 	  Domain is taken from the "dnsd_domain" environment variable,
 	  with a fallback to "failsafe.lan".
 
+config MTK_NET_ABORT
+	bool "Network boot abort (uBootEnter.py compatible)"
+	depends on MTK_HTTPD
+	default y
+	help
+	  Enable network based boot abort.  While the boot countdown runs,
+	  U-Boot listens for the "UBOOT:ABORT" magic packet (UDP port 37541)
+	  broadcast by the uBootEnter.py tool.  When it is received, the
+	  boot is interrupted, an "UBOOT:ABORTED" reply is broadcast from
+	  port 37540 and the blocking web failsafe (httpd) is entered.
+
+	  This allows entering web recovery without console access.
+
+	  Disable at runtime by setting the environment variable:
+	    setenv disable_net_abort 1
+
 config NET_FORCE_IPADDR
-	bool "Use ipaddr and netmask with CONFIG_IPADDR and CONFIG_NETMASK"
+	bool "Force IP address and netmask from config/env"
 	default n
+	help
+	  Use ipaddr and netmask with values from config/env.
 
 endif   # if NET
 

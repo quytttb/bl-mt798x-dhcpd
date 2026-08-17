@@ -27,6 +27,9 @@
 #include <net.h>
 #include <version_string.h>
 #include <efi_loader.h>
+#ifdef CONFIG_MTK_NET_ABORT
+#include <net_abort.h>
+#endif
 
 static void run_preboot_environment_command(void)
 {
@@ -88,11 +91,17 @@ void main_loop(void)
 	run_command("glbtn", 0);
 #endif
 
+	if (IS_ENABLED(CONFIG_MTK_NET_ABORT))
+		net_abort_prepare();
+
 	s = bootdelay_process();
 	if (cli_process_fdt(&s))
 		cli_secure_boot_cmd(s);
 
 	autoboot_command(s);
+
+	if (IS_ENABLED(CONFIG_MTK_NET_ABORT))
+		net_abort_finish();
 
 	/*
 	 * autoboot_command() returned: boot was interrupted or failed.

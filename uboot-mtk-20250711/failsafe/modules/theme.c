@@ -18,8 +18,8 @@
 #include <linux/string.h>
 #include <net/mtk_httpd.h>
 
-#include "../fs.h"
-#include "../failsafe_internal.h"
+#include <failsafe/fs.h>
+#include <failsafe/internal.h>
 
 #define THEME_COLOR_ENV "failsafe_theme_color"
 #define THEME_COLOR_MAX_LEN 8

@@ -32,8 +32,8 @@
 #include <part.h>
 #endif
 
-#include "../fs.h"
-#include "helpers.h"
+#include <failsafe/fs.h>
+#include <failsafe/helpers.h>
 
 /* ------------------------------------------------------------------ */
 /*  HTTP response helpers                                              */
@@ -242,6 +242,27 @@ size_t json_escape(char *dst, size_t dst_sz, const char *src)
 }
 
 /* ------------------------------------------------------------------ */
+/*  Safe buffer append (JSON payload builders)                         */
+/* ------------------------------------------------------------------ */
+
+int buf_appendf(char *buf, int size, int len, const char *fmt, ...)
+{
+	va_list ap;
+	int n;
+
+	if (len >= size)
+		return len;
+
+	va_start(ap, fmt);
+	n = vscnprintf(buf + len, size - len, fmt, ap);
+	va_end(ap);
+
+	if (n > 0)
+		return len + n;
+	return len;
+}
+
+/* ------------------------------------------------------------------ */
 /*  MMC presence check                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -393,24 +414,35 @@ struct mmc_mid_entry {
 };
 
 static const struct mmc_mid_entry mmc_mid_table[] = {
-	{ 0x00, "Spansion" },
+	{ 0x00, "SanDisk/Spansion" },
 	{ 0x01, "Samsung" },
-	{ 0x02, "SanDisk" },
+	{ 0x02, "Kingston/SanDisk" },
 	{ 0x03, "Toshiba" },
+	{ 0x05, "Unknown" },
+	{ 0x06, "Unknown"},
 	{ 0x11, "Toshiba" },
 	{ 0x13, "Micron" },
-	{ 0x15, "Samsung" },
+	{ 0x15, "Samsung/SanDisk/LG" },
 	{ 0x18, "Swissbit" },
-	{ 0x2c, "HIKSEM" },
+	{ 0x2c, "HIKSEM/Kingston" },
+	{ 0x2f, "Konsemi" },
 	{ 0x30, "SMART Modular" },
 	{ 0x32, "Qimonda" },
-	{ 0x44, "Transcend" },
-	{ 0x45, "SanDisk" },
+	{ 0x37, "KingMax"},
+	{ 0x44, "ATP/Transcend" },
+	{ 0x45, "SanDisk/WesternDigital" },
 	{ 0x70, "Kingston" },
+	{ 0x88, "Longsys" },
 	{ 0x90, "SK hynix" },
-	{ 0x9c, "ATP Electronics" },
+	{ 0x9b, "YMTC" },
+	{ 0x9c, "ATP" },
 	{ 0xce, "Samsung" },
-	{ 0xfe, "Foresee" },
+	{ 0xd6, "Longsys" },
+	{ 0xdf, "SCY" },
+	{ 0xea, "Kowin/SiliconGo/SPeMMC" },
+	{ 0xec, "ATO/Rayson" },
+	{ 0xf4, "BIWIN" },
+	{ 0xfe, "Foresee/Micron" },
 };
 
 static const char *mmc_mid_lookup(unsigned int mid)

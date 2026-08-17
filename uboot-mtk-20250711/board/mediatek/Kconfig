@@ -345,6 +345,25 @@ config MTD_LAYOUT_SPI_NAND
 	  Enable this for non-NMBM builds where the raw flash device
 	  is named "spi-nand0" instead of "nmbm0".
 
+config MTK_FDT_BOOTARGS_FALLBACK
+	bool "Preserve existing bootargs when mtd-layout cmdline is missing"
+	depends on MEDIATEK_MULTI_MTD_LAYOUT
+	default n
+	help
+	  When enabled, the mtd-layout processing will only overwrite the
+	  bootargs environment variable if the current layout explicitly
+	  defines a cmdline property. If cmdline is absent, the existing
+	  bootargs (e.g. from the official firmware FDT) are preserved.
+
+	  Additionally, board_fdt_chosen_bootargs() will fall back to the
+	  bootargs already present in the target FDT when the environment
+	  bootargs is empty, ensuring the kernel always receives valid
+	  boot arguments.
+
+	  Enable this for devices that boot official firmware whose FDT
+	  does not contain NMBM properties or whose mtd-layout default
+	  entry lacks a cmdline.
+
 config MTD_VERIFY_FDT
 	bool "Enable mtd device boot Linux FDT verification"
 	depends on MTD

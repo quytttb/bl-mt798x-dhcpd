@@ -36,8 +36,8 @@ extern const char *mtd_layout_spi_nand_replace(const char *str, char *buf,
 					       size_t bufsz);
 #endif
 
-#include "../fs.h"
-#include "../failsafe_internal.h"
+#include <failsafe/fs.h>
+#include <failsafe/internal.h>
 
 /* ------------------------------------------------------------------ */
 /*  Version handler                                                    */
@@ -129,13 +129,13 @@ static int sysinfo_json_append_board(char *buf, int len, int left)
 	json_escape(esc_board_compat, sizeof(esc_board_compat), board_compat ? board_compat : "");
 	json_escape(esc_build_variant, sizeof(esc_build_variant), build_variant ? build_variant : "");
 
-	len += snprintf(buf + len, left - len,
+	len = buf_appendf(buf, left, len,
 		"\"board\":{\"model\":\"%s\",\"compatible\":\"%s\"},",
 		esc_board_model, esc_board_compat);
-	len += snprintf(buf + len, left - len,
+	len = buf_appendf(buf, left, len,
 		"\"ram\":{\"size\":%llu},",
 		(unsigned long long)ram_size);
-	len += snprintf(buf + len, left - len,
+	len = buf_appendf(buf, left, len,
 		"\"build_variant\":\"%s\",",
 		esc_build_variant);
 
@@ -157,13 +157,13 @@ static int sysinfo_json_append_mtd_layout(char *buf, int len, int left)
 	bool custom_seen = false;
 
 	json_escape(esc_cur, sizeof(esc_cur), cur ? cur : "");
-	len += snprintf(buf + len, left - len,
+	len = buf_appendf(buf, left, len,
 			"\"mtd_layout\":{\"current\":\"%s\",",
 			esc_cur);
 
 	node = ofnode_path("/mtd-layout");
 	if (ofnode_valid(node) && ofnode_get_child_count(node)) {
-		len += snprintf(buf + len, left - len, "\"layouts\":[");
+		len = buf_appendf(buf, left, len, "\"layouts\":[");
 		ofnode_for_each_subnode(layout, node) {
 			const char *label = ofnode_read_string(layout, "label");
 			const char *parts = ofnode_read_string(layout, "mtdparts");
@@ -188,7 +188,7 @@ static int sysinfo_json_append_mtd_layout(char *buf, int len, int left)
 			json_escape(esc_parts, sizeof(esc_parts), parts ? parts : "");
 			if (cur && !strcmp(label, cur))
 				cur_parts = parts;
-			len += snprintf(buf + len, left - len,
+			len = buf_appendf(buf, left, len,
 				"%s{\"label\":\"%s\",\"parts\":\"%s\"}",
 				first ? "" : ",", esc_label, esc_parts);
 			first = false;
@@ -199,12 +199,12 @@ static int sysinfo_json_append_mtd_layout(char *buf, int len, int left)
 			json_escape(esc_parts, sizeof(esc_parts), custom_parts);
 			if (cur && !strcmp(cur, MTD_LAYOUT_CUSTOM_LABEL))
 				cur_parts = custom_parts;
-			len += snprintf(buf + len, left - len,
+			len = buf_appendf(buf, left, len,
 				"%s{\"label\":\"%s\",\"parts\":\"%s\"}",
 				first ? "" : ",", MTD_LAYOUT_CUSTOM_LABEL,
 				esc_parts);
 		}
-		len += snprintf(buf + len, left - len, "],");
+		len = buf_appendf(buf, left, len, "],");
 	} else {
 		if (custom_parts && custom_parts[0]) {
 			char esc_parts[512];
@@ -212,16 +212,16 @@ static int sysinfo_json_append_mtd_layout(char *buf, int len, int left)
 			json_escape(esc_parts, sizeof(esc_parts), custom_parts);
 			if (cur && !strcmp(cur, MTD_LAYOUT_CUSTOM_LABEL))
 				cur_parts = custom_parts;
-			len += snprintf(buf + len, left - len,
+			len = buf_appendf(buf, left, len,
 				"\"layouts\":[{\"label\":\"%s\",\"parts\":\"%s\"}],",
 				MTD_LAYOUT_CUSTOM_LABEL, esc_parts);
 		} else {
-			len += snprintf(buf + len, left - len, "\"layouts\":[],");
+			len = buf_appendf(buf, left, len, "\"layouts\":[],");
 		}
 	}
 
 	json_escape(esc_cur_parts, sizeof(esc_cur_parts), cur_parts ? cur_parts : "");
-	len += snprintf(buf + len, left - len,
+	len = buf_appendf(buf, left, len,
 			"\"current_parts\":\"%s\"},",
 			esc_cur_parts);
 
@@ -231,7 +231,7 @@ static int sysinfo_json_append_mtd_layout(char *buf, int len, int left)
 
 static int sysinfo_json_append_mmc(char *buf, int len, int left)
 {
-	len += snprintf(buf + len, left - len, "\"mmc\":{");
+	len = buf_appendf(buf, left, len, "\"mmc\":{");
 #ifdef CONFIG_MTK_BOOTMENU_MMC
 	{
 		struct mmc *mmc;
@@ -250,15 +250,15 @@ static int sysinfo_json_append_mmc(char *buf, int len, int left)
 						   pretty_vendor, sizeof(pretty_vendor));
 			json_escape(esc_vendor, sizeof(esc_vendor), pretty_vendor);
 			json_escape(esc_product, sizeof(esc_product), bd->product ? bd->product : "");
-			len += snprintf(buf + len, left - len,
+			len = buf_appendf(buf, left, len,
 				"\"present\":true,\"vendor\":\"%s\",\"product\":\"%s\",\"blksz\":%lu,\"size\":%llu,",
 				esc_vendor, esc_product, (unsigned long)bd->blksz,
 				(unsigned long long)mmc->capacity_user);
 		} else {
-			len += snprintf(buf + len, left - len, "\"present\":false,");
+			len = buf_appendf(buf, left, len, "\"present\":false,");
 		}
 
-		len += snprintf(buf + len, left - len, "\"parts\":[");
+		len = buf_appendf(buf, left, len, "\"parts\":[");
 #ifdef CONFIG_PARTITIONS
 		if (present) {
 			struct disk_partition dpart;
@@ -275,7 +275,7 @@ static int sysinfo_json_append_mmc(char *buf, int len, int left)
 					continue;
 				}
 
-				len += snprintf(buf + len, left - len,
+				len = buf_appendf(buf, left, len,
 					"%s{\"name\":\"%s\",\"start\":%llu,\"size\":%llu}",
 					first ? "" : ",",
 					dpart.name,
@@ -287,12 +287,12 @@ static int sysinfo_json_append_mmc(char *buf, int len, int left)
 			}
 		}
 #endif
-		len += snprintf(buf + len, left - len, "]");
+		len = buf_appendf(buf, left, len, "]");
 	}
 #else
-	len += snprintf(buf + len, left - len, "\"present\":false,\"parts\":[]");
+	len = buf_appendf(buf, left, len, "\"present\":false,\"parts\":[]");
 #endif
-	len += snprintf(buf + len, left - len, "}");
+	len = buf_appendf(buf, left, len, "}");
 
 	return len;
 }
@@ -321,25 +321,25 @@ void sysinfo_handler(enum httpd_uri_handler_status status,
 		return;
 	}
 
-	len += snprintf(buf + len, left - len, "{");
+	len = buf_appendf(buf, left, len, "{");
 
 	/* board + RAM + build_variant */
 	len = sysinfo_json_append_board(buf, len, left);
 
 	/* storage section */
-	len += snprintf(buf + len, left - len, "\"storage\":{");
+	len = buf_appendf(buf, left, len, "\"storage\":{");
 
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
 	len = sysinfo_json_append_mtd_layout(buf, len, left);
 #else
-	len += snprintf(buf + len, left - len, "\"mtd_layout\":null,");
+	len = buf_appendf(buf, left, len, "\"mtd_layout\":null,");
 #endif
 
 	/* MMC info */
 	len = sysinfo_json_append_mmc(buf, len, left);
 
-	len += snprintf(buf + len, left - len, "}");
-	len += snprintf(buf + len, left - len, "}");
+	len = buf_appendf(buf, left, len, "}");
+	len = buf_appendf(buf, left, len, "}");
 
 	failsafe_http_reply_json_alloc(response, 200, buf, buf);
 }

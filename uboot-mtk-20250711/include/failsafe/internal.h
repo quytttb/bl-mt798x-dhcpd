@@ -16,7 +16,7 @@
 #include <net/mtk_httpd.h>
 #include <linux/types.h>
 #include <failsafe/fw_type.h>
-#include "modules/helpers.h"
+#include <failsafe/helpers.h>
 
 /* ------------------------------------------------------------------ */
 /*  Core weak functions (defined in failsafe.c, used by modules)       */
