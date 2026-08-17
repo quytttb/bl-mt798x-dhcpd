@@ -7,7 +7,7 @@
 
 #include <linker_lists.h>
 #include <string.h>
-#include "fs.h"
+#include <failsafe/fs.h>
 
 const struct fs_desc *fs_find_file(const char *path)
 {

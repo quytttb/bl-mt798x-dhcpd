@@ -25,7 +25,7 @@
 #include "../../board/mediatek/common/mmc_helper.h"
 #endif
 
-#include "../failsafe_internal.h"
+#include <failsafe/internal.h>
 
 /* ------------------------------------------------------------------ */
 /*  Core upgrade state                                                 */

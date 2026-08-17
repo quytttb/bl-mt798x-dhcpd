@@ -335,7 +335,21 @@ int fdt_kaslrseed(void *fdt, bool overwrite)
  */
 __weak const char *board_fdt_chosen_bootargs(const struct fdt_property *fdt_ba)
 {
-	return env_get("bootargs");
+	const char *env_ba;
+
+	env_ba = env_get("bootargs");
+
+	if (IS_ENABLED(CONFIG_MTK_FDT_BOOTARGS_FALLBACK)) {
+		if (env_ba && *env_ba)
+			return env_ba;
+
+		/* Fallback to bootargs already present in the target FDT
+		 * (e.g. official firmware embedded bootargs) */
+		if (fdt_ba && fdt_ba->len > 1)
+			return (const char *)fdt_ba->data;
+	}
+
+	return env_ba;
 }
 
 #ifndef CONFIG_FDT_NO_BOOTARGS_OVERRIDE

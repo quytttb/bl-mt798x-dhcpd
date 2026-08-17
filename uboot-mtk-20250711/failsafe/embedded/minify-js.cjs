@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const UglifyJS = require("uglify-js");
+const { minify } = require("terser");
 
 function fail(message) {
     console.error(`[failsafe-minify] ${message}`);
@@ -22,25 +22,27 @@ try {
     fail(`read failed for ${inputPath}: ${error.message}`);
 }
 
-const result = UglifyJS.minify(source, {
-    compress: {
-        passes: 2,
-    },
-    mangle: {
-        toplevel: false,
-    },
-    output: {
-        comments: false,
-    },
-});
+(async () => {
+    try {
+        const result = await minify(source, {
+            compress: {
+                passes: 2,
+            },
+            mangle: {
+                toplevel: false,
+            },
+            format: {
+                comments: false,
+            },
+        });
 
-if (result.error) {
-    fail(`minify failed for ${inputPath}: ${result.error.message || result.error}`);
-}
+        if (result.error) {
+            fail(`minify failed for ${inputPath}: ${result.error.message || result.error}`);
+        }
 
-try {
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, result.code || "", "utf8");
-} catch (error) {
-    fail(`write failed for ${outputPath}: ${error.message}`);
-}
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+        fs.writeFileSync(outputPath, result.code || "", "utf8");
+    } catch (error) {
+        fail(`minify failed for ${inputPath}: ${error.message || error}`);
+    }
+})();

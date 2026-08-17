@@ -35,10 +35,10 @@
 #include <part.h>
 #endif
 
-#include "../failsafe_internal.h"
+#include <failsafe/internal.h>
 
 #ifdef CONFIG_WEBUI_FAILSAFE_NAND_RAW
-#include "nand_raw.h"
+#include <failsafe/nand_raw.h>
 #endif
 
 /* Max bytes to read per /flash/read request in chunked mode.

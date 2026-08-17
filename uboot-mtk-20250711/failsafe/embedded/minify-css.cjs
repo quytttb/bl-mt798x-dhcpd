@@ -22,7 +22,7 @@ try {
     fail(`read failed for ${inputPath}: ${error.message}`);
 }
 
-const result = new CleanCSS({ level: 2 }).minify(source);
+const result = new CleanCSS({ level: 2, inline: false }).minify(source);
 
 if (result.errors && result.errors.length) {
     fail(`minify failed for ${inputPath}: ${result.errors.join('; ')}`);

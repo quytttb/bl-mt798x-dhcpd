@@ -31,7 +31,7 @@
 #include <ubifs_uboot.h>
 #endif
 
-#include "../failsafe_internal.h"
+#include <failsafe/internal.h>
 
 /* Max buffer size for JSON response */
 #define UBI_JSON_BUF_SZ		16384
@@ -76,12 +76,12 @@ void ubi_info_handler(enum httpd_uri_handler_status status,
 	struct ubi_device *ubi = ubi_devices[0];
 
 	if (!ubi) {
-		len += snprintf(buf + len, left - len,
+		len = buf_appendf(buf, left, len,
 			"{\"error\":\"no ubi device\",\"attached\":false}");
 		goto done;
 	}
 
-	len += snprintf(buf + len, left - len,
+	len = buf_appendf(buf, left, len,
 		"{\"attached\":true,"
 		"\"mtd_name\":\"%s\","
 		"\"ubi_num\":%d,"
@@ -152,12 +152,12 @@ void ubi_volumes_handler(enum httpd_uri_handler_status status,
 	struct ubi_device *ubi = ubi_devices[0];
 
 	if (!ubi) {
-		len += snprintf(buf + len, left - len,
+		len = buf_appendf(buf, left, len,
 			"{\"error\":\"no ubi device\",\"volumes\":[]}");
 		goto done;
 	}
 
-	len += snprintf(buf + len, left - len, "{\"volumes\":[");
+	len = buf_appendf(buf, left, len, "{\"volumes\":[");
 
 	for (int i = 0; i < ubi->vtbl_slots && len < left - 256; i++) {
 		struct ubi_volume *vol = ubi->volumes[i];
@@ -167,7 +167,7 @@ void ubi_volumes_handler(enum httpd_uri_handler_status status,
 		if (vol->vol_id >= UBI_INTERNAL_VOL_START)
 			continue;
 
-		len += snprintf(buf + len, left - len,
+		len = buf_appendf(buf, left, len,
 			"%s{\"id\":%d,\"name\":\"%s\","
 			"\"size\":%llu,\"used_bytes\":%llu,"
 			"\"type\":\"%s\","
@@ -192,7 +192,7 @@ void ubi_volumes_handler(enum httpd_uri_handler_status status,
 		first = false;
 	}
 
-	len += snprintf(buf + len, left - len, "]}");
+	len = buf_appendf(buf, left, len, "]}");
 
 done:
 	failsafe_http_reply_json_alloc(response, 200, buf, buf);
@@ -609,7 +609,7 @@ void ubi_mtd_list_handler(enum httpd_uri_handler_status status,
 		return;
 	}
 
-	len += snprintf(buf + len, left - len, "{\"partitions\":[");
+	len = buf_appendf(buf, left, len, "{\"partitions\":[");
 
 	/* Probe all MTD devices */
 	mtd_probe_devices();
@@ -618,7 +618,7 @@ void ubi_mtd_list_handler(enum httpd_uri_handler_status status,
 		if (len >= left - 256)
 			break;
 
-		len += snprintf(buf + len, left - len,
+		len = buf_appendf(buf, left, len,
 			"%s{\"name\":\"%s\",\"size\":%llu,\"erasesize\":%lu}",
 			first ? "" : ",",
 			mtd->name,
@@ -628,7 +628,7 @@ void ubi_mtd_list_handler(enum httpd_uri_handler_status status,
 		first = false;
 	}
 
-	len += snprintf(buf + len, left - len, "]}");
+	len = buf_appendf(buf, left, len, "]}");
 
 	failsafe_http_reply_json_alloc(response, 200, buf, buf);
 }

@@ -20,7 +20,7 @@
 #include <linux/string.h>
 #include <net/mtk_httpd.h>
 
-#include "../failsafe_internal.h"
+#include <failsafe/internal.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 

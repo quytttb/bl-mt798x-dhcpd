@@ -11,7 +11,7 @@
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <mtd/mtd-abi.h>
-#include "nand_raw.h"
+#include <failsafe/nand_raw.h>
 
 #ifdef CONFIG_MTD
 

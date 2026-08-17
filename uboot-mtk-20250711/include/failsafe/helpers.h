@@ -133,6 +133,23 @@ void failsafe_str_sanitize(char *s);
 size_t json_escape(char *dst, size_t dst_sz, const char *src);
 
 /**
+ * buf_appendf - append a formatted string to a buffer
+ * @buf: destination buffer
+ * @size: total size of @buf
+ * @len: current used length of @buf
+ * @fmt: format string
+ * ...
+ *
+ * Appends the formatted output at @buf + @len.  Uses vscnprintf() so the
+ * returned value is the number of characters actually written (clamped to
+ * @size - 1 - @len); feeding it back as @len keeps @buf within bounds.
+ *
+ * Returns the new used length.
+ */
+int buf_appendf(char *buf, int size, int len, const char *fmt, ...)
+	__attribute__((format(printf, 4, 5)));
+
+/**
  * failsafe_mmc_present - check if MMC device is present
  *
  * Returns true if the configured MMC device is present and valid.
