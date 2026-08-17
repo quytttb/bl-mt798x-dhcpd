@@ -18,7 +18,7 @@
 #include <linux/string.h>
 #include <net/mtk_httpd.h>
 
-#include "../failsafe_internal.h"
+#include <failsafe/internal.h>
 
 #define ENV_NAME_MAX_LEN 128
 
