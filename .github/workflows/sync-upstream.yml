@@ -26,10 +26,6 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          # SYNC_TOKEN must be a PAT with Contents + Workflows read/write:
-          # GITHUB_TOKEN is always rejected when a push touches
-          # .github/workflows/* (e.g. upstream changes FIP-build.yml).
-          token: ${{ secrets.SYNC_TOKEN || github.token }}
 
       - name: Configure Git identity
         run: |
@@ -58,6 +54,7 @@ jobs:
 
           # Keep fork-owned files when upstream changes the same paths.
           git config merge.ours.driver true
+          main_sha="$(git rev-parse HEAD)"
           git switch -C "$SYNC_BRANCH"
           if ! git merge "upstream/$UPSTREAM_BRANCH" \
             -m "chore: sync upstream $UPSTREAM_BRANCH (${upstream_sha:0:12})"; then
@@ -65,6 +62,13 @@ jobs:
             echo "::error::Upstream merge has conflicts; resolve and push the sync branch manually."
             exit 1
           fi
+
+          # GITHUB_TOKEN can never push commits that touch .github/workflows/*
+          # and upstream tracks BL2/FIP/GPT-build.yml. Drop upstream workflow
+          # changes so the automated push stays allowed; port them manually.
+          git rm -rqf --ignore-unmatch .github/workflows
+          git checkout "$main_sha" -- .github/workflows
+          git commit --amend --no-edit
 
           git push --force-with-lease origin "$SYNC_BRANCH"
           echo "needs_sync=true" >> "$GITHUB_OUTPUT"
@@ -81,7 +85,7 @@ jobs:
           body="$(cat <<EOF_BODY
           Automated merge of \`Yuzhii0718/$UPSTREAM_BRANCH\`.
 
-          Fork-specific Viettel board definitions, build workflows, README, and custom failsafe/build files are protected with \`merge=ours\`. This pull request is intentionally not merged automatically; review shared build logic and any upstream changes that affect custom integrations before merging.
+          Fork-specific Viettel board definitions, build workflows, README, and custom failsafe/build files are protected with `merge=ours`. Upstream changes under `.github/workflows/` are dropped automatically (GITHUB_TOKEN cannot push workflow file changes); port them manually if needed. This pull request is intentionally not merged automatically; review shared build logic and any upstream changes that affect custom integrations before merging.
           EOF_BODY
           )"
           pr_number="$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')"
