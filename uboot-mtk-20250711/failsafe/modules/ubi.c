@@ -811,6 +811,299 @@ void ubi_backup_handler(enum httpd_uri_handler_status status,
 	response->size = st->hdr_len;
 }
 
+/**
+ * ubi_check_vol_handler - POST /ubi/check
+ *
+ * Form parameters:
+ *   name - Volume name to check
+ *
+ * Returns JSON: {"exists":true} or {"exists":false}
+ */
+void ubi_check_vol_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	char *name = NULL;
+	char *json_out;
+	int ret;
+
+	failsafe_free_session(status, response);
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	if (!request || request->method != HTTP_POST) {
+		failsafe_http_reply_text(response, 405, "method");
+		return;
+	}
+
+	struct ubi_device *ubi = ubi_devices[0];
+
+	if (!ubi) {
+		json_out = strdup("{\"error\":\"no ubi device attached\"}");
+		failsafe_http_reply_json_alloc(response, 400,
+			json_out ? json_out : "{\"error\":\"no ubi device\"}",
+			json_out);
+		return;
+	}
+
+	/* Get volume name */
+	ret = failsafe_get_form_value(request, "name", &name,
+		UBI_VOL_NAME_MAX_LEN, false, false);
+	if (ret || !name || !name[0]) {
+		json_out = strdup("{\"error\":\"missing volume name\"}");
+		failsafe_http_reply_json_alloc(response, 400,
+			json_out ? json_out : "{\"error\":\"missing name\"}",
+			json_out);
+		return;
+	}
+
+	/* Check volume existence */
+	struct ubi_volume *vol = ubi_find_volume(name);
+	free(name);
+
+	json_out = malloc(64);
+	if (json_out)
+		snprintf(json_out, 64, "{\"exists\":%s}",
+			vol ? "true" : "false");
+	failsafe_http_reply_json_alloc(response, 200,
+		json_out ? json_out : "{\"exists\":false}", json_out);
+}
+
+/**
+ * ubi_write_vol_handler - POST /ubi/write
+ *
+ * Form parameters:
+ *   name      - Volume name to write
+ *   data      - File content to write (binary safe)
+ *   offset    - Write offset in bytes (optional, default 0)
+ *   full_size - Total size of the update (optional, for partial updates)
+ *
+ * Behavior:
+ *   - offset > 0:   offset-based write at the given byte offset
+ *   - offset == 0 && full_size > 0 && full_size != size:
+ *                   begin a partial update declaring full_size as total
+ *   - otherwise:    full volume update with size == full_size
+ *
+ * Returns JSON: {"ok":true} or {"error":"..."}
+ */
+void ubi_write_vol_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	struct httpd_form_value *name_val;
+	struct httpd_form_value *data_val;
+	char *vol_name = NULL;
+	char *offset_str = NULL;
+	char *full_str = NULL;
+	char *json_out;
+	loff_t offset = 0;
+	size_t full_size = 0;
+	int ret;
+
+	failsafe_free_session(status, response);
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	if (!request || request->method != HTTP_POST) {
+		failsafe_http_reply_text(response, 405, "method");
+		return;
+	}
+
+	struct ubi_device *ubi = ubi_devices[0];
+
+	if (!ubi) {
+		json_out = strdup("{\"error\":\"no ubi device attached\"}");
+		failsafe_http_reply_json_alloc(response, 400,
+			json_out ? json_out : "{\"error\":\"no ubi device\"}",
+			json_out);
+		return;
+	}
+
+	/* Get volume name (binary-safe form value) */
+	name_val = httpd_request_find_value(request, "name");
+	if (!name_val || !name_val->data || !name_val->size) {
+		json_out = strdup("{\"error\":\"missing volume name\"}");
+		failsafe_http_reply_json_alloc(response, 400,
+			json_out ? json_out : "{\"error\":\"missing name\"}",
+			json_out);
+		return;
+	}
+
+	if (name_val->size > UBI_VOL_NAME_MAX_LEN) {
+		json_out = strdup("{\"error\":\"volume name too long\"}");
+		failsafe_http_reply_json_alloc(response, 400,
+			json_out ? json_out : "{\"error\":\"name too long\"}",
+			json_out);
+		return;
+	}
+
+	vol_name = malloc(name_val->size + 1);
+	if (!vol_name) {
+		failsafe_http_reply_json(response, 500, "{\"error\":\"oom\"}");
+		return;
+	}
+
+	memcpy(vol_name, name_val->data, name_val->size);
+	vol_name[name_val->size] = '\0';
+
+	/* Get file data (binary safe) */
+	data_val = httpd_request_find_value(request, "data");
+	if (!data_val || !data_val->data || !data_val->size) {
+		free(vol_name);
+		json_out = strdup("{\"error\":\"missing data\"}");
+		failsafe_http_reply_json_alloc(response, 400,
+			json_out ? json_out : "{\"error\":\"missing data\"}",
+			json_out);
+		return;
+	}
+
+	/* Get optional offset */
+	ret = failsafe_get_form_value(request, "offset", &offset_str, 32,
+		true, true);
+	if (ret == 0 && offset_str && offset_str[0]) {
+		offset = (loff_t)simple_strtoull(offset_str, NULL, 0);
+		if (offset < 0)
+			offset = 0;
+	}
+	free(offset_str);
+
+	/* Get optional full_size */
+	ret = failsafe_get_form_value(request, "full_size", &full_str, 32,
+		true, true);
+	if (ret == 0 && full_str && full_str[0])
+		full_size = (size_t)simple_strtoull(full_str, NULL, 0);
+	free(full_str);
+
+	/* Write data */
+	if (offset > 0) {
+		ret = ubi_volume_write(vol_name, data_val->data,
+			offset, data_val->size);
+	} else if (full_size > 0 && full_size != data_val->size) {
+		ret = ubi_volume_begin_write(vol_name, data_val->data,
+			data_val->size, full_size);
+	} else {
+		ret = ubi_volume_write(vol_name, data_val->data,
+			0, data_val->size);
+	}
+	free(vol_name);
+
+	if (ret) {
+		json_out = malloc(128);
+		if (json_out)
+			snprintf(json_out, 128,
+				"{\"error\":\"write failed: %d\"}", ret);
+		failsafe_http_reply_json_alloc(response, 500,
+			json_out ? json_out : "{\"error\":\"write failed\"}",
+			json_out);
+		return;
+	}
+
+	json_out = strdup("{\"ok\":true}");
+	failsafe_http_reply_json_alloc(response, 200,
+		json_out ? json_out : "{\"ok\":true}", json_out);
+}
+
+/**
+ * ubi_skipcheck_handler - POST /ubi/skipcheck
+ *
+ * Form parameters:
+ *   name - Volume name
+ *   mode - "on" or "1" to enable skip check, "off" or "0" to disable
+ *
+ * Returns JSON: {"ok":true} or {"error":"..."}
+ */
+void ubi_skipcheck_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	char *name = NULL;
+	char *mode = NULL;
+	char *json_out;
+	bool skip_check;
+	int ret;
+
+	failsafe_free_session(status, response);
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	if (!request || request->method != HTTP_POST) {
+		failsafe_http_reply_text(response, 405, "method");
+		return;
+	}
+
+	struct ubi_device *ubi = ubi_devices[0];
+
+	if (!ubi) {
+		json_out = strdup("{\"error\":\"no ubi device attached\"}");
+		failsafe_http_reply_json_alloc(response, 400,
+			json_out ? json_out : "{\"error\":\"no ubi device\"}",
+			json_out);
+		return;
+	}
+
+	/* Get volume name */
+	ret = failsafe_get_form_value(request, "name", &name,
+		UBI_VOL_NAME_MAX_LEN, false, false);
+	if (ret || !name || !name[0]) {
+		json_out = strdup("{\"error\":\"missing volume name\"}");
+		failsafe_http_reply_json_alloc(response, 400,
+			json_out ? json_out : "{\"error\":\"missing name\"}",
+			json_out);
+		return;
+	}
+
+	/* Get mode */
+	ret = failsafe_get_form_value(request, "mode", &mode, 8, false, false);
+	if (ret || !mode || !mode[0]) {
+		free(name);
+		json_out = strdup("{\"error\":\"missing mode\"}");
+		failsafe_http_reply_json_alloc(response, 400,
+			json_out ? json_out : "{\"error\":\"missing mode\"}",
+			json_out);
+		return;
+	}
+
+	skip_check = (mode[0] == 'o' && mode[1] == 'n') ||
+		     (mode[0] == '1');
+	free(mode);
+
+	/* Find volume */
+	struct ubi_volume *vol = ubi_find_volume(name);
+	if (!vol) {
+		free(name);
+		json_out = strdup("{\"error\":\"volume not found\"}");
+		failsafe_http_reply_json_alloc(response, 404,
+			json_out ? json_out : "{\"error\":\"not found\"}",
+			json_out);
+		return;
+	}
+
+	/* Set/clear skip check flag */
+	ret = ubi_set_skip_check(name, skip_check);
+	free(name);
+
+	if (ret) {
+		json_out = malloc(128);
+		if (json_out)
+			snprintf(json_out, 128,
+				"{\"error\":\"skipcheck failed: %d\"}", ret);
+		failsafe_http_reply_json_alloc(response, 500,
+			json_out ? json_out : "{\"error\":\"skipcheck failed\"}",
+			json_out);
+		return;
+	}
+
+	json_out = malloc(96);
+	if (json_out)
+		snprintf(json_out, 96, "{\"ok\":true,\"skip_check\":%s}",
+			skip_check ? "true" : "false");
+	failsafe_http_reply_json_alloc(response, 200,
+		json_out ? json_out : "{\"ok\":true}", json_out);
+}
+
 #ifdef CONFIG_WEBUI_FAILSAFE_UBI
 void ubi_register_handlers(struct httpd_instance *inst)
 {
@@ -823,6 +1116,9 @@ void ubi_register_handlers(struct httpd_instance *inst)
 	httpd_register_uri_handler(inst, "/ubi/create", &ubi_create_vol_handler, NULL);
 	httpd_register_uri_handler(inst, "/ubi/remove", &ubi_remove_vol_handler, NULL);
 	httpd_register_uri_handler(inst, "/ubi/rename", &ubi_rename_vol_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/check", &ubi_check_vol_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/write", &ubi_write_vol_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/skipcheck", &ubi_skipcheck_handler, NULL);
 	httpd_register_uri_handler(inst, "/ubi/mtd_list", &ubi_mtd_list_handler, NULL);
 	httpd_register_uri_handler(inst, "/ubi/backup", &ubi_backup_handler, NULL);
 }
