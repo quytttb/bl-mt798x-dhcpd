@@ -9,7 +9,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  workflows: write
 
 concurrency:
   group: sync-upstream
@@ -27,6 +26,10 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          # SYNC_TOKEN must be a PAT with Contents + Workflows read/write:
+          # GITHUB_TOKEN is always rejected when a push touches
+          # .github/workflows/* (e.g. upstream changes FIP-build.yml).
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
 
       - name: Configure Git identity
         run: |
