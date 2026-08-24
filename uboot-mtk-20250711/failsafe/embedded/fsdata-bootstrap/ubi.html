@@ -67,12 +67,13 @@
 										<th data-i18n="ubi.col.used">Used</th>
 										<th data-i18n="ubi.col.type">Type</th>
 										<th data-i18n="ubi.col.status">Status</th>
+										<th data-i18n="ubi.col.crc">CRC Check</th>
 										<th data-i18n="ubi.col.actions">Actions</th>
 									</tr>
 								</thead>
 								<tbody id="ubi_volume_tbody">
 									<tr>
-										<td colspan="7" class="table-empty" data-i18n="ubi.no_device">No UBI device attached</td>
+										<td colspan="8" class="table-empty" data-i18n="ubi.no_device">No UBI device attached</td>
 									</tr>
 								</tbody>
 							</table>
@@ -114,6 +115,40 @@
 							<button type="button" id="btn_create" class="button" data-i18n="ubi.btn.create">Create Volume</button>
 						</div>
 					</section>
+
+					<section class="settings-section">
+						<h2 class="settings-heading" data-i18n="ubi.write.title">Write Volume</h2>
+						<div class="form-row">
+							<div class="field">
+								<label for="write_vol_select" data-i18n="ubi.write.name">Volume:</label>
+								<select id="write_vol_select" class="field-control">
+									<option value="" data-i18n="ubi.write.select">Select volume...</option>
+								</select>
+							</div>
+						</div>
+						<div class="form-row">
+							<div class="field">
+								<label for="write_file" data-i18n="ubi.write.file">Image File:</label>
+								<input id="write_file" class="field-control" type="file" name="data">
+							</div>
+						</div>
+						<div class="form-row form-row-2">
+							<div class="field">
+								<label for="write_offset" data-i18n="ubi.write.offset">Offset (bytes, optional):</label>
+								<input id="write_offset" class="field-control" type="text" placeholder="e.g. 0x10000">
+							</div>
+							<div class="field">
+								<label for="write_full_size" data-i18n="ubi.write.full_size">Full Size (bytes, optional):</label>
+								<input id="write_full_size" class="field-control" type="text" placeholder="e.g. 0x800000">
+							</div>
+						</div>
+						<p data-i18n="ubi.write.hint">Writing overwrites the selected volume. Use Offset/Full Size for partial updates.</p>
+						<div class="form-actions">
+							<button type="button" id="btn_write" class="button" data-i18n="ubi.btn.write.submit">Write</button>
+						</div>
+						<div class="bar" id="ubi_write_bar" style="display: none; --percent: 0;"></div>
+						<div id="ubi_write_status" style="display: none;"></div>
+					</section>
 				</div>
 			</div>
 				<div class="card-foot">
@@ -124,6 +159,7 @@
 							<li data-i18n="ubi.warn.remove">Removing a volume permanently deletes its data.</li>
 							<li data-i18n="ubi.warn.static">Static volumes cannot be written to after creation.</li>
 							<li data-i18n="ubi.warn.backup">Do not power off the device during backup.</li>
+							<li data-i18n="ubi.warn.write">Writing overwrites the volume contents. Do not power off during write.</li>
 						</ul>
 					</div>
 				</div>

@@ -70,8 +70,10 @@
         var tbody = document.getElementById("ubi_volume_tbody");
         if (!tbody) return;
 
+        renderWriteVolSelect(volumes);
+
         if (!volumes || volumes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="table-empty" data-i18n="ubi.no_volumes">' + t("ubi.no_volumes") + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="table-empty" data-i18n="ubi.no_volumes">' + t("ubi.no_volumes") + '</td></tr>';
             return;
         }
 
@@ -81,6 +83,8 @@
             var statusClass = vol.corrupted ? "red" : "";
             var statusText = vol.corrupted ? t("ubi.status.corrupted") :
                             (vol.upd_marker ? t("ubi.status.updating") : t("ubi.status.ok"));
+            var crcText = vol.skip_check ? t("ubi.status.crc_skip") : t("ubi.status.crc_check");
+            var crcClass = vol.skip_check ? "red" : "";
 
             html += '<tr>';
             html += '<td class="col-num">' + vol.id + '</td>';
@@ -89,7 +93,10 @@
             html += '<td class="col-size">' + bytesToHuman(vol.used_bytes) + '</td>';
             html += '<td>' + t("ubi.type." + vol.type) + '</td>';
             html += '<td class="' + statusClass + '">' + statusText + '</td>';
+            html += '<td class="' + crcClass + '">' + crcText + ' <button class="button button-sm" onclick="ubiToggleSkipCheck(\'' + escapeHtml(vol.name) + '\',' + (vol.skip_check ? "true" : "false") + ')">' + (vol.skip_check ? t("ubi.btn.crc_enable") : t("ubi.btn.crc_disable")) + '</button></td>';
             html += '<td>';
+            html += '<button class="button button-sm" onclick="ubiCheckVol(\'' + escapeHtml(vol.name) + '\')">' + t("ubi.btn.check") + '</button> ';
+            html += '<button class="button button-sm" onclick="ubiWriteVol(\'' + escapeHtml(vol.name) + '\')">' + t("ubi.btn.write") + '</button> ';
             html += '<button class="button button-sm" onclick="ubiBackupVol(\'' + escapeHtml(vol.name) + '\')">' + t("ubi.btn.backup") + '</button> ';
             html += '<button class="button button-sm" onclick="ubiRenameVol(\'' + escapeHtml(vol.name) + '\')">' + t("ubi.btn.rename") + '</button> ';
             html += '<button class="button button-danger button-sm" onclick="ubiRemoveVol(\'' + escapeHtml(vol.name) + '\')">' + t("ubi.btn.remove") + '</button>';
@@ -174,6 +181,19 @@
         // Auto-select "ubi" partition if it exists
         if (ubiIndex >= 0) {
             select.selectedIndex = ubiIndex + 1; // +1 for the placeholder option
+        }
+    }
+
+    function renderWriteVolSelect(volumes) {
+        var select = document.getElementById("write_vol_select");
+        if (!select) return;
+        select.innerHTML = '<option value="" data-i18n="ubi.write.select">' + t("ubi.write.select") + '</option>';
+        if (!volumes) return;
+        for (var i = 0; i < volumes.length; i++) {
+            var opt = document.createElement("option");
+            opt.value = volumes[i].name;
+            opt.textContent = volumes[i].name + " (" + bytesToHuman(volumes[i].size) + ")";
+            select.appendChild(opt);
         }
     }
 
@@ -335,6 +355,126 @@
         });
     }
 
+    function checkVolume(name) {
+        setStatus(t("ubi.status.checking"));
+        var formData = new FormData();
+        formData.append("name", name);
+
+        ajax({
+            url: "/ubi/check",
+            data: formData,
+            done: function (resp) {
+                try {
+                    var data = JSON.parse(resp);
+                    if (data.exists) {
+                        setStatus(t("ubi.check.exists").replace("$1", name));
+                    } else {
+                        setStatus(t("ubi.check.not_exists").replace("$1", name), true);
+                    }
+                } catch (e) {
+                    setStatus(t("ubi.error.parse"), true);
+                }
+            }
+        });
+    }
+
+    function toggleSkipCheck(name, skip) {
+        setStatus(t("ubi.status.skipcheck_updating"));
+        var formData = new FormData();
+        formData.append("name", name);
+        // Target mode = inverse of the current state
+        formData.append("mode", skip ? "0" : "1");
+
+        ajax({
+            url: "/ubi/skipcheck",
+            data: formData,
+            done: function (resp) {
+                try {
+                    var data = JSON.parse(resp);
+                    if (data.ok) {
+                        setStatus(data.skip_check ? t("ubi.status.skipcheck_on") : t("ubi.status.skipcheck_off"));
+                        fetchVolumeList();
+                    } else {
+                        setStatus(data.error || t("ubi.error.skipcheck_failed"), true);
+                    }
+                } catch (e) {
+                    setStatus(t("ubi.error.parse"), true);
+                }
+            }
+        });
+    }
+
+    function writeVolume() {
+        var select = document.getElementById("write_vol_select");
+        var fileInput = document.getElementById("write_file");
+        var offsetInput = document.getElementById("write_offset");
+        var fullSizeInput = document.getElementById("write_full_size");
+
+        var volName = select ? select.value : "";
+        if (!volName) {
+            setWriteStatus(t("ubi.error.no_write_vol"), true);
+            return;
+        }
+        var file = fileInput && fileInput.files && fileInput.files[0];
+        if (!file) {
+            setWriteStatus(t("ubi.error.no_file"), true);
+            return;
+        }
+
+        setWriteProgress(0);
+        setWriteStatus(t("ubi.status.writing") + " " + bytesToHuman(file.size));
+
+        var formData = new FormData();
+        formData.append("name", volName);
+        formData.append("data", file);
+        if (offsetInput && offsetInput.value.trim()) {
+            formData.append("offset", offsetInput.value.trim());
+        }
+        if (fullSizeInput && fullSizeInput.value.trim()) {
+            formData.append("full_size", fullSizeInput.value.trim());
+        }
+
+        ajax({
+            url: "/ubi/write",
+            data: formData,
+            progress: function (event) {
+                if (event.lengthComputable) {
+                    setWriteProgress(event.loaded / event.total * 100);
+                }
+            },
+            done: function (resp) {
+                try {
+                    var data = JSON.parse(resp);
+                    if (data.ok) {
+                        setWriteProgress(100);
+                        setWriteStatus(t("ubi.status.written"));
+                        fetchVolumeList();
+                        fetchUbiInfo();
+                    } else {
+                        setWriteStatus(data.error || t("ubi.error.write_failed"), true);
+                    }
+                } catch (e) {
+                    setWriteStatus(t("ubi.error.parse"), true);
+                }
+            }
+        });
+    }
+
+    function writeVolumeTo(name) {
+        var select = document.getElementById("write_vol_select");
+        if (select) {
+            for (var i = 0; i < select.options.length; i++) {
+                if (select.options[i].value === name) {
+                    select.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        var fileInput = document.getElementById("write_file");
+        if (fileInput) fileInput.focus();
+        setStatus("");
+    }
+
     function setBackupStatus(msg) {
         var el = document.getElementById("ubi_backup_status");
         if (!el) return;
@@ -344,6 +484,22 @@
 
     function setBackupProgress(percent) {
         var el = document.getElementById("ubi_backup_bar");
+        if (!el) return;
+        var p = Math.max(0, Math.min(100, parseInt(percent || 0)));
+        el.style.display = "block";
+        el.style.setProperty("--percent", p);
+    }
+
+    function setWriteStatus(msg, isError) {
+        var el = document.getElementById("ubi_write_status");
+        if (!el) return;
+        el.style.display = msg ? "block" : "none";
+        el.textContent = msg || "";
+        el.className = isError ? "red" : "";
+    }
+
+    function setWriteProgress(percent) {
+        var el = document.getElementById("ubi_write_bar");
         if (!el) return;
         var p = Math.max(0, Math.min(100, parseInt(percent || 0)));
         el.style.display = "block";
@@ -417,6 +573,9 @@
     window.ubiRemoveVol = removeVolume;
     window.ubiRenameVol = renameVolume;
     window.ubiBackupVol = backupVolume;
+    window.ubiCheckVol = checkVolume;
+    window.ubiWriteVol = writeVolumeTo;
+    window.ubiToggleSkipCheck = toggleSkipCheck;
 
     // Initialize
     window.ubiInit = function () {
@@ -445,6 +604,11 @@
         var btnCreate = document.getElementById("btn_create");
         if (btnCreate) {
             btnCreate.addEventListener("click", createVolume);
+        }
+
+        var btnWrite = document.getElementById("btn_write");
+        if (btnWrite) {
+            btnWrite.addEventListener("click", writeVolume);
         }
     };
 })();

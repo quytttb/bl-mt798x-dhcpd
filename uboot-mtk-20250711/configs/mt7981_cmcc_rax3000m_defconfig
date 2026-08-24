@@ -105,3 +105,4 @@ CONFIG_ENV_MTD_DEV="u-boot-env"
 # CONFIG_I2C_SET_DEFAULT_BUS_NUM is not set
 # CONFIG_PCIE_MEDIATEK is not set
 # CONFIG_EFI_LOADER is not set
+CONFIG_MTK_DEFAULT_FIT_BOOT_CONF="config-1#mt7981b-cmcc-rax3000m-nand"
