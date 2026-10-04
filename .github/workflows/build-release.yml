@@ -92,6 +92,15 @@ jobs:
           test "$(find output -maxdepth 1 -type f | wc -l)" -ge 4
           (cd output && sha256sum * > sha256sums)
 
+      - name: Build RAM-boot BL2 for mtk_uartboot (MT7981 DDR3 BGA)
+        run: |
+          VERSION=SP2 ./compile_atf.sh mt7981-ddr3-bga-ram
+          ram_img="$(ls -t output_bl2/bl2-mt7981-ddr3-bga-ram-SP2*.img output_bl2/bl2-mt7981-ddr3-bga-ram-SP2*.bin 2>/dev/null | head -n 1)"
+          test -n "$ram_img"
+          cp -f "$ram_img" "output/bl2-mt7981-ddr3-bga-ram-SP2.${ram_img##*.}"
+          (cd output && sha256sum * > sha256sums)
+          ls -l output/
+
       - name: Upload release assets
         uses: actions/upload-artifact@v7
         with:
@@ -131,4 +140,8 @@ jobs:
             The release contains the SP2 (TF-A 20260123) FIP and BL2 images for both boards,
             build logs, and `sha256sums`. Flash only the image for the matching model.
             Back up the full flash and Factory partition before updating a bootloader.
+
+            `bl2-mt7981-ddr3-bga-ram-SP2.bin` is the RAM-boot BL2 for mtk_uartboot
+            recovery (MT7981 DDR3 BGA; usable for NR3053). It is not flashed;
+            load it via UART to boot U-Boot from RAM.
           files: release-assets/*

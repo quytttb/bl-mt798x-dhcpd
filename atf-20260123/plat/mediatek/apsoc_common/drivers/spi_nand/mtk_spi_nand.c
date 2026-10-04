@@ -27,6 +27,7 @@
 #define MICRON_ID			0x2CU
 #define TOSHIBA_ID			0x98U
 #define FORESEE_ID			0xCDU
+#define DOSILICON_ID			0xE5U
 #define ONFI_SIGNATURE			0x4F4E4649U
 #define NAND_SIGNATURE			0x4E414E44U /* Kioxia/Toshiba use this*/
 #define CASN_SIGNATURE			0x4341534EU
@@ -64,6 +65,9 @@ static const struct spi_nand_info spi_nand_flash[] = {
 	SPI_NAND_INFO("W25N01GV",
 		SPI_NAND_ID(true, 3, 0xef, 0xaa, 0x21, 0x00),
 		SPI_NAND_MEMORG_1G_2K_64, true, false),
+	SPI_NAND_INFO("DS35Q2GBS",
+		SPI_NAND_ID(true, 2, 0xe5, 0xb2, 0x00, 0x00),
+		SPI_NAND_MEMORG_2G_2K_128, true, true),
 	SPI_NAND_INFO("MX35LF1GE4AB",
 		SPI_NAND_ID(true, 2, 0xc2, 0x12, 0x00, 0x00),
 		SPI_NAND_MEMORG_1G_2K_64, true, true)
@@ -148,7 +152,8 @@ static int spi_nand_quad_enable(uint8_t manufacturer_id)
 	    manufacturer_id != GIGADEVICE_ID &&
 	    manufacturer_id != ETRON_ID &&
 	    manufacturer_id != FORESEE_ID &&
-	    manufacturer_id != FUDAN_ID) {
+	    manufacturer_id != FUDAN_ID &&
+	    manufacturer_id != DOSILICON_ID) {
 		return 0;
 	}
 
@@ -761,7 +766,7 @@ static int spi_nand_set_data_via_id(struct spinand_device *device, uint8_t *id,
 			idstr[len - 1] = 0;
 
 		NOTICE("SPI-NAND probed by ID: %s\n", idstr);
-		NOTICE("SPI-NAND: %s (%lluMB)\n", spi_nand_flash[i].model,
+		NOTICE("SPI-NAND: %s (%lluMB)\n", nand_info->model,
 		       device->nand_dev->size >> 20);
 
 		return 0;

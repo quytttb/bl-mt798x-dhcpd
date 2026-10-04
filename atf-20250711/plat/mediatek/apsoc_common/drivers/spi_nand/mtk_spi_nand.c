@@ -66,6 +66,9 @@ static const struct spi_nand_info spi_nand_flash[] = {
 	SPI_NAND_INFO("W25N01GV",
 		SPI_NAND_ID(true, 3, 0xef, 0xaa, 0x21, 0x00),
 		SPI_NAND_MEMORG_1G_2K_64, true, false),
+	SPI_NAND_INFO("DS35Q2GBS",
+		SPI_NAND_ID(true, 2, 0xe5, 0xb2, 0x00, 0x00),
+		SPI_NAND_MEMORG_2G_2K_128, true, true),
 	SPI_NAND_INFO("MX35LF1GE4AB",
 		SPI_NAND_ID(true, 2, 0xc2, 0x12, 0x00, 0x00),
 		SPI_NAND_MEMORG_1G_2K_64, true, true)
