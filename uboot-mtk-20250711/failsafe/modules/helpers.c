@@ -228,6 +228,28 @@ size_t json_escape(char *dst, size_t dst_sz, const char *src)
 			continue;
 		}
 
+		if (c == 0x1b || c == 0x08) {
+			/*
+			 * Round-trip CSI / backspace so the failsafe web
+			 * console can render U-Boot `bootmenu` (and any
+			 * other program using cursor positioning / SGR
+			 * colors) instead of collapsing it into one
+			 * unreadable blob of "[2J[1;1H..." text.  See
+			 * console_js.js:ansiTerm.
+			 */
+			static const char hex[] = "0123456789abcdef";
+
+			if (di + 6 >= dst_sz)
+				break;
+			dst[di++] = '\\';
+			dst[di++] = 'u';
+			dst[di++] = '0';
+			dst[di++] = '0';
+			dst[di++] = hex[(c >> 4) & 0xf];
+			dst[di++] = hex[c & 0xf];
+			continue;
+		}
+
 		if (c < 0x20) {
 			/* skip other control chars */
 			dst[di++] = ' ';

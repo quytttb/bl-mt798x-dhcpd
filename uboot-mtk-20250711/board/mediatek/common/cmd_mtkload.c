@@ -15,7 +15,7 @@
 #include <linux/types.h>
 
 #include "load_data.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 
 static int run_image(ulong data_addr, size_t data_size)
 {

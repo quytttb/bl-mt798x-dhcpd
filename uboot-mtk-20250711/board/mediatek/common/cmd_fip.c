@@ -8,7 +8,7 @@
 #include <string.h>
 #include <command.h>
 #include <vsprintf.h>
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 #include "fip_helper.h"
 #include "fip.h"
 

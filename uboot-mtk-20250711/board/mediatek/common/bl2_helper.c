@@ -11,7 +11,7 @@
 #include "bl2_helper.h"
 #include "fip_helper.h"
 #include "board_info.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 

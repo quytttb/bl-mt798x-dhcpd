@@ -18,6 +18,8 @@ extern int board_boot_default(bool do_boot);
 extern int board_chainload_default(bool do_boot);
 
 int boot_from_mem(ulong data_load_addr);
+int boot_image_from_mem(ulong data_load_addr, size_t image_size,
+				 ulong load_fallback);
 
 struct arg_pair {
 	const char *key;

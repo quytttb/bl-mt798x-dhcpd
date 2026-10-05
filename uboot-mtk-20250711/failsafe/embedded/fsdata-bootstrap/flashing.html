@@ -16,7 +16,12 @@
 			ajax({
 				url: '/result',
 				done: function (response) {
-					if (response == 'failed') {
+					/* The status word is the first line; a
+					 * firmware that knows why the write failed
+					 * appends "code:" / "error:" lines (also
+					 * readable from /last-error, which the
+					 * fail page fetches). */
+					if (String(response).split('\n')[0].trim() == 'failed') {
 						location = '/fail.html'
 						return
 					}

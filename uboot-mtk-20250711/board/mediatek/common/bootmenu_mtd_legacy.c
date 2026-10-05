@@ -8,7 +8,7 @@
 #include "bootmenu_common.h"
 #include "autoboot_helper.h"
 #include "mtd_helper.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 
 static int write_part_try_names(const char *partnames[], const void *data,
 				size_t size, bool verify)
