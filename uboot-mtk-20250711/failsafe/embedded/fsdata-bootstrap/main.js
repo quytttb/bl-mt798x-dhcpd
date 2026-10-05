@@ -992,6 +992,7 @@ function appInit(pageName) {
     pageName === "env" && typeof envInit === "function" && envInit()
     pageName === "settings" && typeof settingsInit === "function" && settingsInit();
     pageName === "ubi" && typeof ubiInit === "function" && ubiInit();
+    pageName === "fail" && typeof failInit === "function" && failInit();
 
     console.log('\n%c Yuzhii0718 ' + UBOOT_VERSION + ' %c ' + GITHUB_USER_URL + ' ', 'color: #fadfa3; background: #030307; padding:5px 0;', 'background: #fadfa3; padding:5px 0;');
 }
@@ -1406,6 +1407,38 @@ function getversion() {
     });
 }
 
+/**
+ * Show what the firmware reported about the failed upgrade on fail.html.
+ *
+ * GET /last-error (see failsafe/modules/upgrade.c, filled by the failure
+ * sites through <failsafe/error.h>) carries the code and the message of the
+ * failure, so the reason is visible on the page instead of only on the
+ * U-Boot console.  Without a report the page keeps its generic text.
+ */
+async function failInit() {
+    const box = document.getElementById("error_box");
+    if (!box) return;
+
+    let report = null;
+    try {
+        const response = await fetch("/last-error", { cache: "no-store" });
+        if (response.ok) report = await response.json();
+    } catch { /* keep the generic text */ }
+
+    const code = report?.code ?? 0;
+    const message = String(report?.error ?? "").trim();
+    if (!message && !code) return;
+
+    const textElement = document.getElementById("error_text");
+    const codeElement = document.getElementById("error_code");
+    if (textElement) {
+        textElement.textContent = message ||
+            t("fail.msg.unknown", "no details were reported");
+    }
+    if (codeElement) codeElement.textContent = String(code);
+    box.style.display = "";
+}
+
 function upload(formFieldName) {
     const selectedFile = document.getElementById("file").files[0];
     if (!selectedFile) return;
@@ -1433,7 +1466,11 @@ function upload(formFieldName) {
         url: "/upload",
         data: formData,
         done: (responseText) => {
-            if (responseText === "fail") {
+            /* The status word is the first line; on failure the firmware
+             * appends "code:" / "error:" lines saying why it rejected the
+             * image (also available from /last-error, which the fail page
+             * reads after the redirect). */
+            if (String(responseText).split("\n")[0].trim() === "fail") {
                 location = "/fail.html";
                 return;
             }

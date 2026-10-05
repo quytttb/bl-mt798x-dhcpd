@@ -24,7 +24,7 @@
 #include "image_helper.h"
 #include "upgrade_helper.h"
 #include "boot_helper.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 #include "verify_helper.h"
 #include "mtd_helper.h"
 #include "dual_boot.h"

@@ -15,7 +15,7 @@
 
 #include "load_data.h"
 #include "upgrade_helper.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 
 int check_data_size(u64 total_size, u64 offset, size_t max_size, size_t size,
 		    bool write)

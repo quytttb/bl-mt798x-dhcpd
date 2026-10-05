@@ -27,7 +27,7 @@
 
 #include "mtk_wget.h"
 #include "load_data.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 
 #define BUF_SIZE	1024
 
