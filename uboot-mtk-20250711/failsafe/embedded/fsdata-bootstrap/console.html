@@ -49,6 +49,8 @@
 								autocapitalize="off" autocorrect="off" spellcheck="false"
 								data-i18n-attr="placeholder:console.placeholder.cmd"
 								placeholder="help; printenv; mtd list" aria-label="command">
+							<button type="button" id="console_abort" class="button button-warn" onclick="consoleAbort()"
+								style="display:none" title="Ctrl+C" data-i18n="console.abort">Abort</button>
 							<button type="button" class="button" onclick="consoleSend()" data-i18n="console.send">Send</button>
 						</div>
 					</div>

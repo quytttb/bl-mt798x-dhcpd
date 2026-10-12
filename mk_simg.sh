@@ -1,9 +1,8 @@
 #!/bin/sh
-
-# Batch build script for MediaTek single image (simg)
+# mk_simg.sh - Batch build MediaTek single image (simg)
 #
-# This script scans sub-folders under mt798x_simg/, detects board type from folder name,
-# then calls ATF single image wrapper:
+# This script scans sub-folders under mt798x_simg/, detects board type from
+# folder name, then calls ATF single image wrapper:
 #   ${ATF_DIR}/tools/dev/single_img_wrapper/mk_image.sh
 #
 # Folder naming convention (suggested):
@@ -16,6 +15,29 @@
 #   (append) -dual-image       -> enable dual image mode
 #
 # Outputs are written to output_simg/<folder>-simg.bin
+#
+# Usage:
+#   ./mk_simg.sh [options]
+#
+# Options:
+#   -c, --config <file>        Use a specific partition config yml for all boards
+#   -C, --config-dir <dir>     Use a directory containing <device>.yml for each board
+#                              (e.g. emmc.yml, sd.yml, spim-nand.yml, snfi-nand.yml, spim-nor.yml)
+#   -h, --help                 Show this help
+#
+# Environment variables:
+#   ATF_DIR       ATF source folder (default depends on VERSION)
+#   VERSION       2025/2026 (default: 2025)
+#   SIMG_DIR      input folder containing board subfolders (default: mt798x_simg)
+#   OUTPUT_DIR    output folder (default: output_simg)
+#   DRY_RUN=1     only print commands, do not execute
+#
+# Partition config override (env):
+#   PARTITION_CONFIG      Same as --config; if it is a directory, treated as --config-dir
+#
+# Notes:
+#   - This script is meant to be executed on Linux.
+#   - It calls: atf-20250711/tools/dev/single_img_wrapper/mk_image.sh (or ATF_DIR override).
 
 TOOL_MK_IMAGE_REL="tools/dev/single_img_wrapper/mk_image.sh"
 
@@ -45,30 +67,8 @@ GLOBAL_PARTITION_CONFIG=""
 PARTITION_CONFIG_DIR=""
 
 usage() {
-    cat <<'EOF'
-Usage:
-    ./mk_simg.sh [options]
-
-Options:
-    -c, --config <file>        Use a specific partition config yml for all boards
-    -C, --config-dir <dir>     Use a directory containing <device>.yml for each board
-                                                         (e.g. emmc.yml, sd.yml, spim-nand.yml, snfi-nand.yml, spim-nor.yml)
-    -h, --help                 Show this help
-
-Environment variables:
-  ATF_DIR       ATF source folder (default depends on VERSION)
-  VERSION       2025/2026 (default: 2025)
-  SIMG_DIR      input folder containing board subfolders (default: mt798x_simg)
-  OUTPUT_DIR    output folder (default: output_simg)
-  DRY_RUN=1     only print commands, do not execute
-
-Partition config override (env):
-    PARTITION_CONFIG      Same as --config; if it is a directory, treated as --config-dir
-
-Notes:
-  - This script is meant to be executed on Linux.
-  - It calls: atf-20250711/tools/dev/single_img_wrapper/mk_image.sh (or ATF_DIR override).
-EOF
+    sed -n '2,/^[^#]/p' "$0" | grep -E '^#( |$)' | sed 's/^# \?//'
+    exit 0
 }
 
 say() {

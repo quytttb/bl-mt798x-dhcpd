@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include "fip_helper.h"
 #include "board_info.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 #include "unxz.h"
 
 DECLARE_GLOBAL_DATA_PTR;

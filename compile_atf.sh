@@ -1,10 +1,45 @@
 #!/bin/bash
-#===============================================================================
-# compile_atf.sh - Batch compile ATF BL2 images for MediaTek MT798x platforms
+# compile_atf.sh - Batch compile ATF (ARM Trusted Firmware) BL2 images for
+#                  MediaTek MT798x platforms
 #
-# Usage: ./compile_atf.sh [CONFIG...]
-#        ./compile_atf.sh --help
-#===============================================================================
+# Usage:
+#   ./compile_atf.sh [CONFIG...]
+#
+# Description:
+#   Builds ATF BL2 firmware images for config files under ATFCFG_DIR.
+#   Without arguments, all .config files are built.  Specify one or more
+#   config names to build only those configs.
+#
+# Arguments:
+#   CONFIG              Config name(s) to build (optional).
+#                       Can be a plain name (e.g. "mt7981-ddr3-bga-ram"
+#                       matches "mt798x_atf/mt7981-ddr3-bga-ram.config")
+#                       or a relative sub-path (e.g. "mt7986/mt7986-ddr3-ram"
+#                       matches "mt798x_atf/mt7986/mt7986-ddr3-ram.config").
+#                       Multiple names may be given.  .config suffix is optional.
+#
+# Optional:
+#   VERSION             Firmware version: 2025 | SP1 | SP2        (default: 2025)
+#   ATFCFG_DIR          Config source directory                   (default: mt798x_atf)
+#   CFG_SUBDIR          Subdirectory under ATFCFG_DIR for extra   (default: empty)
+#                       configs (e.g. "normal")
+#   OUTPUT_DIR          Output directory for built images         (default: output_bl2)
+#   VARIANT             Apply variant options: nonmbm | ubootmod | ubi
+#                       - nonmbm   -> NAND_SKIP_BAD=y
+#                       - ubootmod -> NAND_UBI=y
+#                       - ubi      -> NAND_UBI=y
+#   OC7981              MT7981 overclock ARMPLL freq: 13~18       (1300~1800 MHz)
+#   OC7986              MT7986 overclock ARMPLL freq: 16~25       (1600~2500 MHz)
+#
+# Options:
+#   --help, -h          Show this help message and exit
+#
+# Examples:
+#   ./compile_atf.sh                              # Build all configs
+#   ./compile_atf.sh mt7981-ddr3-bga-ram          # Build one config
+#   ./compile_atf.sh mt7981-ddr3-bga-ram mt7986-ddr4-ram  # Build two configs
+#   ./compile_atf.sh mt7986/mt7986-ddr3-ram       # Build from subdirectory
+#   VERSION=SP2 ./compile_atf.sh normal/mt7981-ram  # With env variables
 
 set -e
 
@@ -38,51 +73,8 @@ OC7986="${OC7986:-}"
 #------------------------------------------------------------------------------
 # --help / -h
 #------------------------------------------------------------------------------
-show_help() {
-	cat <<EOF
-compile_atf.sh - Batch compile ATF (ARM Trusted Firmware) BL2 images
-                 for MediaTek MT798x platforms
-
-Usage:
-  ./compile_atf.sh [CONFIG...]
-
-Description:
-  Builds ATF BL2 firmware images for config files under ATFCFG_DIR.
-  Without arguments, all .config files are built.  Specify one or more
-  config names to build only those configs.
-
-Arguments:
-  CONFIG              Config name(s) to build (optional).
-                      Can be a plain name (e.g. "mt7981-ddr3-bga-ram"
-                      matches "mt798x_atf/mt7981-ddr3-bga-ram.config")
-                      or a relative sub-path (e.g. "mt7986/mt7986-ddr3-ram"
-                      matches "mt798x_atf/mt7986/mt7986-ddr3-ram.config").
-                      Multiple names may be given.  .config suffix is
-                      optional.
-
-Optional:
-  VERSION             Firmware version: 2025 | SP1 | SP2        (default: 2025)
-  ATFCFG_DIR          Config source directory                   (default: mt798x_atf)
-  CFG_SUBDIR          Subdirectory under ATFCFG_DIR for extra   (default: empty)
-                      configs (e.g. "normal")
-  OUTPUT_DIR          Output directory for built images         (default: output_bl2)
-  VARIANT             Apply variant options: nonmbm | ubootmod | ubi
-                      - nonmbm   -> NAND_SKIP_BAD=y
-                      - ubootmod -> NAND_UBI=y
-                      - ubi      -> NAND_UBI=y
-  OC7981              MT7981 overclock ARMPLL freq: 13~18       (1300~1800 MHz)
-  OC7986              MT7986 overclock ARMPLL freq: 16~25       (1600~2500 MHz)
-
-Options:
-  --help, -h          Show this help message and exit
-
-Examples:
-  ./compile_atf.sh                              # Build all configs
-  ./compile_atf.sh mt7981-ddr3-bga-ram          # Build one config
-  ./compile_atf.sh mt7981-ddr3-bga-ram mt7986-ddr4-ram  # Build two configs
-  ./compile_atf.sh mt7986/mt7986-ddr3-ram       # Build from subdirectory
-  VERSION=SP2 ./compile_atf.sh normal/mt7981-ram  # With env variables
-EOF
+usage() {
+	sed -n '2,/^[^#]/p' "$0" | grep -E '^#( |$)' | sed 's/^# \?//'
 	exit 0
 }
 
@@ -92,7 +84,7 @@ EOF
 TARGET_CONFIGS=""
 for arg in "$@"; do
 	case "${arg}" in
-		--help|-h) show_help ;;
+		--help|-h) usage ;;
 		*) TARGET_CONFIGS="${TARGET_CONFIGS} ${arg}" ;;
 	esac
 done

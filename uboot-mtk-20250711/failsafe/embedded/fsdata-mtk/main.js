@@ -86,7 +86,7 @@ function upload(name) {
         url: '/upload',
         data: form,
         done: function (resp) {
-            if (resp == 'fail') {
+            if (String(resp).split('\n')[0].trim() == 'fail') {
                 location = '/fail.html';
             } else {
                 const info = resp.split(' ');
