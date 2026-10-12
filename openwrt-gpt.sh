@@ -1,16 +1,27 @@
 #!/bin/bash
-# ============================================================================
 # openwrt-gpt.sh - Generate SDMMC & eMMC GPT binary files using ptgen
 #
-#   Run:  ./openwrt-gpt.sh
+# Usage:
+#   ./openwrt-gpt.sh
 #
-#   Output:
-#     output_gpt/openwrt-emmc-gpt.bin
-#     output_gpt/openwrt-sdmmc-gpt.bin
+# Output:
+#   output_gpt/openwrt-emmc-gpt.bin
+#   output_gpt/openwrt-sdmmc-gpt.bin
 #
-#   Optional:
-#     ROOTFS_PARTSIZE   production partition size in MiB  (default: 1024)
-# ============================================================================
+# Optional:
+#   ROOTFS_PARTSIZE   production partition size in MiB  (default: 1024)
+#
+# Options:
+#   --help, -h          Show this help message and exit
+
+usage() {
+	sed -n '2,/^[^#]/p' "$0" | grep -E '^#( |$)' | sed 's/^# \?//'
+	exit 0
+}
+
+case "${1:-}" in
+	--help|-h) usage ;;
+esac
 
 ROOTFS_PARTSIZE=${ROOTFS_PARTSIZE:-1024}
 OUTDIR="./output_gpt"
