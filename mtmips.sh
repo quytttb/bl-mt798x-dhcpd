@@ -1,10 +1,28 @@
 #!/bin/bash
-#===============================================================================
 # mtmips.sh - Build U-Boot for MediaTek MT7620/MT7621/MT7628/MT7688 (MIPS)
 #
-# Usage: SOC=<soc> BOARD=<board> [VERSION=2025] ./mtmips.sh
-#        ./mtmips.sh --help
-#===============================================================================
+# Usage: SOC=<mt7620|mt7621|mt7628|mt7688> BOARD=<board_name> [VERSION=2025] ./mtmips.sh
+#
+# Build U-Boot for MediaTek MT7620/MT7621/MT7628/MT7688 (MIPS) platform.
+#
+# Note: mt7628 and mt7688 share the same mt76x8 toolchain.
+#
+# Required:
+#   SOC=<mt7620|mt7621|mt7628|mt7688>   Target SoC
+#   BOARD=<board>           Target board name (matches defconfig: ${SOC}_${BOARD}_defconfig)
+#
+# Options:
+#   VERSION=2025    U-Boot version (default: 2025 -> uboot-mtk-20250711)
+#   TOOLCHAIN=...   Cross-compiler prefix (auto-detected from ./openwrt*/toolchain-mipsel*)
+#   JOBS=<n>        Parallel make jobs (default: nproc)
+#   STAGING_DIR=... Staging directory (auto-detected from TOOLCHAIN)
+#   --help, -h, help    Show this help message and exit
+#
+# Examples:
+#   SOC=mt7620 BOARD=rfb                     ./mtmips.sh
+#   SOC=mt7621 BOARD=rfb                     ./mtmips.sh
+#   SOC=mt7628 BOARD=rfb                     ./mtmips.sh
+#   SOC=mt7688 BOARD=rfb                     ./mtmips.sh
 
 set -e
 
@@ -33,36 +51,14 @@ TOOLCHAIN_URL="${TOOLCHAIN_URL:-}"
 #------------------------------------------------------------------------------
 # --help / -h
 #------------------------------------------------------------------------------
-show_help() {
-	cat <<'EOF'
-Usage: SOC=<mt7620|mt7621|mt7628|mt7688> BOARD=<board_name> [VERSION=2025] ./mtmips.sh
-
-Build U-Boot for MediaTek MT7620/MT7621/MT7628/MT7688 (MIPS) platform.
-
-Note: mt7628 and mt7688 share the same mt76x8 toolchain.
-
-Required:
-  SOC=<mt7620|mt7621|mt7628|mt7688>   Target SoC
-  BOARD=<board>           Target board name (matches defconfig: ${SOC}_${BOARD}_defconfig)
-
-Options:
-  VERSION=2025    U-Boot version (default: 2025 -> uboot-mtk-20250711)
-  TOOLCHAIN=...   Cross-compiler prefix (auto-detected from ./openwrt*/toolchain-mipsel*)
-  JOBS=<n>        Parallel make jobs (default: nproc)
-  STAGING_DIR=... Staging directory (auto-detected from TOOLCHAIN)
-
-Examples:
-  SOC=mt7620 BOARD=rfb                     ./mtmips.sh
-  SOC=mt7621 BOARD=rfb                     ./mtmips.sh
-  SOC=mt7628 BOARD=rfb                     ./mtmips.sh
-  SOC=mt7688 BOARD=rfb                     ./mtmips.sh
-EOF
+usage() {
+	sed -n '2,/^[^#]/p' "$0" | grep -E '^#( |$)' | sed 's/^# \?//'
+	exit 0
 }
 
 case "${1:-}" in
 	--help|-h|help)
-		show_help
-		exit 0
+		usage
 		;;
 esac
 
@@ -239,18 +235,27 @@ print_configuration() {
 build_uboot() {
 	step "Build U-Boot [${SOC_UPPER}]"
 
-	rm -f "${UBOOT_DIR}/u-boot.bin" "${UBOOT_DIR}/u-boot-with-spl.bin"
+	rm -f "${UBOOT_DIR}/u-boot.bin" "${UBOOT_DIR}/u-boot-with-spl.bin" \
+		"${UBOOT_DIR}/u-boot-mt7621.bin"
 	cp -f "${UBOOT_DIR}/configs/${UBOOT_CFG}" "${UBOOT_DIR}/.config"
 
 	make -C "${UBOOT_DIR}" olddefconfig
 	make -C "${UBOOT_DIR}" clean
 	make -C "${UBOOT_DIR}" CROSS_COMPILE="${TOOLCHAIN}" STAGING_DIR="${Staging}" -j "${JOBS}" all
 
-	# Determine output image: respect CONFIG_BUILD_TARGET (e.g. u-boot-with-spl.bin for SPL builds)
+	# Determine the flashable image.
 	local uboot_bin
-	uboot_bin=$(get_config "BUILD_TARGET")
-	uboot_bin=$(echo "${uboot_bin}" | tr -d '"')
-	[ -n "${uboot_bin}" ] || uboot_bin="u-boot.bin"
+	if [ "${SOC}" = "mt7621" ]; then
+		# mt7621: the binman-composed u-boot-mt7621.bin (TPL + SPL/DDR stage +
+		# compressed U-Boot), i.e. the image written to flash, not the
+		# u-boot-lzma.img payload embedded in it.
+		uboot_bin="u-boot-mt7621.bin"
+	else
+		# Respect CONFIG_BUILD_TARGET (e.g. u-boot-with-spl.bin for SPL builds)
+		uboot_bin=$(get_config "BUILD_TARGET")
+		uboot_bin=$(echo "${uboot_bin}" | tr -d '"')
+		[ -n "${uboot_bin}" ] || uboot_bin="u-boot.bin"
+	fi
 
 	if [ ! -f "${UBOOT_DIR}/${uboot_bin}" ]; then
 		error "U-Boot build failed! ${uboot_bin} not generated."

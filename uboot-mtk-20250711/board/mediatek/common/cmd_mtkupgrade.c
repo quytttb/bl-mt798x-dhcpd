@@ -13,7 +13,7 @@
 #include <linux/types.h>
 
 #include "load_data.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 #include "upgrade_helper.h"
 #include "autoboot_helper.h"
 

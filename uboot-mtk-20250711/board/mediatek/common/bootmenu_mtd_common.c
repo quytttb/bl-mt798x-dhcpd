@@ -10,7 +10,7 @@
 #include <linux/string.h>
 
 #include "bootmenu_common.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 #include "mtd_helper.h"
 #include "bl2_helper.h"
 #include "fip_helper.h"
