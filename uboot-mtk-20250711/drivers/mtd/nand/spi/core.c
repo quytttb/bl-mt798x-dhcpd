@@ -899,6 +899,9 @@ static const struct spinand_manufacturer *spinand_manufacturers[] = {
 #ifdef CONFIG_MTD_SPI_NAND_CHUCUN
 	&chucun_spinand_manufacturer,
 #endif
+#ifdef CONFIG_MTD_SPI_NAND_DAMAY
+	&damay_spinand_manufacturer,
+#endif
 #ifdef CONFIG_MTD_SPI_NAND_DOSILICON
 	&dosilicon_spinand_manufacturer,
 #endif
@@ -929,6 +932,9 @@ static const struct spinand_manufacturer *spinand_manufacturers[] = {
 #endif
 #ifdef CONFIG_MTD_SPI_NAND_HYF
 	&hyf_spinand_manufacturer,
+#endif
+#ifdef CONFIG_MTD_SPI_NAND_ICTHINK
+	&icthink_spinand_manufacturer,
 #endif
 #ifdef CONFIG_MTD_SPI_NAND_ISSI
 	&issi_spinand_manufacturer,
@@ -968,6 +974,9 @@ static const struct spinand_manufacturer *spinand_manufacturers[] = {
 #endif
 #ifdef CONFIG_MTD_SPI_NAND_TYM
 	&tym_spinand_manufacturer,
+#endif
+#ifdef CONFIG_MTD_SPI_NAND_UNILC
+	&unilc_spinand_manufacturer,
 #endif
 #ifdef CONFIG_MTD_SPI_NAND_UNIM
 	&unim_spinand_manufacturer,

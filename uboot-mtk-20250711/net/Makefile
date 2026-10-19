@@ -7,12 +7,12 @@
 
 ifeq ($(CONFIG_NET),y)
 
-WEBUI_FAILSAFE_GIT_HASH := $(or $(strip $(shell \
+TELNET_GIT_HASH := $(or $(strip $(shell \
 	for try in . .. ../..; do \
 		git -C $(srctree)$$try rev-parse --short=7 HEAD 2>/dev/null && break; \
 	done)),unknown)
 
-WEBUI_FAILSAFE_GIT_DIRTY := $(or $(strip $(shell \
+TELNET_GIT_DIRTY := $(or $(strip $(shell \
 	for try in . .. ../..; do \
 		if git -C $(srctree)$$try rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
 			test -n "$$(git -C $(srctree)$$try status --porcelain --untracked-files=no 2>/dev/null)" && echo 1 || echo 0; \
@@ -48,8 +48,8 @@ obj-$(CONFIG_MTK_DHCPD)  += mtk_dhcpd.o
 obj-$(CONFIG_MTK_NET_ABORT)  += net_abort.o
 obj-$(CONFIG_MTK_DNSD)  += mtk_dnsd.o
 obj-$(CONFIG_MTK_TELNETD)  += mtk_telnetd.o
-CFLAGS_mtk_telnetd.o += -DWEBUI_FAILSAFE_GIT_HASH=\"$(WEBUI_FAILSAFE_GIT_HASH)\"
-CFLAGS_mtk_telnetd.o += -DWEBUI_FAILSAFE_GIT_DIRTY=$(WEBUI_FAILSAFE_GIT_DIRTY)
+CFLAGS_mtk_telnetd.o += -DTELNET_GIT_HASH=\"$(TELNET_GIT_HASH)\"
+CFLAGS_mtk_telnetd.o += -DTELNET_GIT_DIRTY=$(TELNET_GIT_DIRTY)
 
 # Disable this warning as it is triggered by:
 # sprintf(buf, index ? "foo%d" : "foo", index)
