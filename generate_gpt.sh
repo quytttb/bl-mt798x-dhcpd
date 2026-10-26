@@ -1,10 +1,33 @@
 #!/bin/bash
-#===============================================================================
-# generate_gpt.sh - Generate GPT binary files from JSON partition layouts
+# generate_gpt.sh - Generate GPT (GUID Partition Table) binary files from JSON
+#                   partition layout descriptions for MT798x platforms
 #
-# Usage: [OPTIONS] ./generate_gpt.sh
-#        ./generate_gpt.sh --help
-#===============================================================================
+# Usage:
+#   [OPTIONS] ./generate_gpt.sh
+#
+# Modes:
+#   Default:            Convert JSON partition layouts -> GPT binary (.bin) files
+#                       Output: output_gpt/gpt-<name>-Yuzhii_md5-<hash>.bin
+#   SHOW=1:             Display partition info from existing GPT bin/img files
+#                       Output: output_gpt/info/<name>_gptinfo.txt
+#                       Output: output_gpt/info/<name>_gpt.json  (partition layout)
+#   DRAW=1:             Also generate partition layout PNG visualization
+#                       Output: output_gpt/picture/gpt-<name>.png
+#   SDMMC=1:            Generate GPT binary for SD/MMC boot mode
+#
+# Optional:
+#   VERSION             Firmware version: 2025 | SP1 | SP2        (default: 2025)
+#   SHOW                Show existing GPT info: 0 | 1             (default: 0)
+#   DRAW                Generate PNG visualization: 0 | 1 | notitle (default: 0)
+#                       "notitle" draws without title text
+#   SDMMC               Generate for SD/MMC boot: 0 | 1           (default: 0)
+#
+# Dependencies:
+#   python2.7           Required for GPT generation
+#   python3             Required for DRAW mode and SHOW JSON generation
+#
+# Options:
+#   --help, -h          Show this help message and exit
 
 set -e
 
@@ -58,43 +81,13 @@ esac
 #------------------------------------------------------------------------------
 # --help / -h
 #------------------------------------------------------------------------------
-show_help() {
-	cat <<EOF
-generate_gpt.sh - Generate GPT (GUID Partition Table) binary files from
-                  JSON partition layout descriptions for MT798x platforms
-
-Usage:
-  [OPTIONS] ./generate_gpt.sh
-
-Modes:
-  Default:            Convert JSON partition layouts -> GPT binary (.bin) files
-                      Output: output_gpt/gpt-<name>-Yuzhii_md5-<hash>.bin
-  SHOW=1:             Display partition info from existing GPT bin/img files
-                      Output: output_gpt/info/<name>_gptinfo.txt
-                      Output: output_gpt/info/<name>_gpt.json  (partition layout)
-  DRAW=1:             Also generate partition layout PNG visualization
-                      Output: output_gpt/picture/gpt-<name>.png
-  SDMMC=1:            Generate GPT binary for SD/MMC boot mode
-
-Optional:
-  VERSION             Firmware version: 2025 | SP1 | SP2        (default: 2025)
-  SHOW                Show existing GPT info: 0 | 1             (default: 0)
-  DRAW                Generate PNG visualization: 0 | 1 | notitle (default: 0)
-                      "notitle" draws without title text
-  SDMMC               Generate for SD/MMC boot: 0 | 1           (default: 0)
-
-Dependencies:
-  python2.7           Required for GPT generation
-  python3             Required for DRAW mode and SHOW JSON generation
-
-Options:
-  --help, -h          Show this help message and exit
-EOF
+usage() {
+	sed -n '2,/^[^#]/p' "$0" | grep -E '^#( |$)' | sed 's/^# \?//'
 	exit 0
 }
 
 case "${1:-}" in
-	--help|-h) show_help ;;
+	--help|-h) usage ;;
 esac
 
 #------------------------------------------------------------------------------
