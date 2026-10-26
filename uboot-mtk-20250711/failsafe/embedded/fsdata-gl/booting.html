@@ -12,7 +12,7 @@
 				ajax({
 					url: '/result',
 					done: function(response) {
-						if (response == 'failed') {
+						if (String(response).split('\n')[0].trim() == 'failed') {
 							location = '/fail.html'
 							return
 						}

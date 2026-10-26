@@ -36,4 +36,27 @@ int mtk_telnetd_start(u16 port);
 void mtk_telnetd_stop(void);
 bool mtk_telnetd_is_running(void);
 
+/**
+ * mtk_telnetd_exec_pending() - a telnet command is queued but not started
+ */
+bool mtk_telnetd_exec_pending(void);
+
+/**
+ * mtk_telnetd_exec_active() - a telnet command is queued or running
+ *
+ * The web console uses this to refuse starting a second command while a
+ * telnet command occupies the single execution slot.
+ */
+bool mtk_telnetd_exec_active(void);
+
+/**
+ * mtk_telnetd_poll() - run a queued telnet command
+ *
+ * MUST be called from the failsafe main poll loop, outside any eth_rx()
+ * frame.  Executing run_command() (which may enter net_loop() for tftp,
+ * ping, ...) from inside the eth_rx() → TCP callback chain would nest
+ * eth_rx() over the same DMA RX ring and corrupt it.
+ */
+void mtk_telnetd_poll(void);
+
 #endif /* __NET_MTK_TELNETD_H__ */

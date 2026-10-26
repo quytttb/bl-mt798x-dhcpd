@@ -21,6 +21,7 @@ extern int arp_wait_try;
 extern uchar *arp_tx_packet;
 
 void arp_init(void);
+void arp_wait_clear(void);
 void arp_request(void);
 void arp_raw_request(struct in_addr source_ip, const uchar *targetEther,
 	struct in_addr target_ip);

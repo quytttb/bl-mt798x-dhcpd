@@ -17,18 +17,23 @@
 		function requestReboot(mode) {
 			var status = document.getElementById('reboot_status');
 			var btnNormal = document.getElementById('btn_reboot');
+			var btnBoot = document.getElementById('btn_boot_system');
 			var btnFailsafe = document.getElementById('btn_reboot_failsafe');
 			var spinner = document.getElementById('l');
 			var pollTimer = null;
 			var pollStart = Date.now();
-			var confirmKey = mode === 'failsafe' ? 'reboot.confirm_failsafe' : 'reboot.confirm';
-			var statusKey = mode === 'failsafe' ? 'reboot.status.failsafe' : 'reboot.status.normal';
-			var url = mode === 'failsafe' ? '/reboot-failsafe' : '/reboot';
+			var confirmKey = mode === 'failsafe' ? 'reboot.confirm_failsafe' :
+				mode === 'boot' ? 'reboot.confirm_boot' : 'reboot.confirm';
+			var statusKey = mode === 'failsafe' ? 'reboot.status.failsafe' :
+				mode === 'boot' ? 'reboot.status.boot' : 'reboot.status.normal';
+			var url = mode === 'failsafe' ? '/reboot-failsafe' :
+				mode === 'boot' ? '/boot' : '/reboot';
 
 			if (!confirm(t(confirmKey)))
 				return;
 
 			if (btnNormal) btnNormal.disabled = true;
+			if (btnBoot) btnBoot.disabled = true;
 			if (btnFailsafe) btnFailsafe.disabled = true;
 			if (spinner) spinner.style.display = 'block';
 
@@ -89,10 +94,17 @@
 						Choose how you want to reboot. Failsafe reboot only takes effect once.
 					</p>
 					<div class="reboot-options">
-						<button id="btn_reboot" class="button reboot-option" onclick="requestReboot('normal')">
+						<button id="btn_reboot" class="button button-success reboot-option" onclick="requestReboot('normal')">
 							<span class="reboot-option-title" data-i18n="reboot.action.normal">Reboot normally</span>
 							<span class="reboot-option-hint" data-i18n="reboot.hint.normal">Boot into the installed
 								firmware</span>
+						</button>
+						<button id="btn_boot_system" class="button reboot-option"
+							onclick="requestReboot('boot')">
+							<span class="reboot-option-title" data-i18n="reboot.action.boot">Boot system
+								directly</span>
+							<span class="reboot-option-hint" data-i18n="reboot.hint.boot">Run bootcmd and boot the
+								installed firmware now</span>
 						</button>
 						<button id="btn_reboot_failsafe" class="button button-warn reboot-option"
 							onclick="requestReboot('failsafe')">
