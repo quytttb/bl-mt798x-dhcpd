@@ -13,7 +13,29 @@
 		<div id="info"><strong>Something went wrong during update</strong>Probably you have chosen wrong file. Please,
 			try again or contact with the author of this modification. You can also get more information during update
 			in U-Boot console.</div>
-	</div>
+		<div id="error_box" style="display:none; margin-top:12px;">
+			<div><strong id="error_text"></strong></div>
+			<div style="font-size:0.85rem;">Error code: <span id="error_code" style="font-family: ui-monospace, monospace;"></span></div>
+		</div>
+		</div>
+		<script>
+		(function () {
+		fetch('/last-error', { cache: 'no-store' }).then(function (r) {
+			return r.ok ? r.json() : null;
+		}).then(function (rep) {
+			if (!rep) return;
+			var msg = (rep.error || '').trim();
+			var code = rep.code || 0;
+			if (!msg && !code) return;
+			var box = document.getElementById('error_box');
+			var t = document.getElementById('error_text');
+			var c = document.getElementById('error_code');
+			if (t) t.textContent = msg || 'no details were reported';
+			if (c) c.textContent = String(code);
+			if (box) box.style.display = '';
+		}).catch(function () {});
+		})();
+		</script>
 </body>
 
 </html>

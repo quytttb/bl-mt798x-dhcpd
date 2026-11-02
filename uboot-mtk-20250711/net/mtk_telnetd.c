@@ -30,7 +30,14 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-extern void failsafe_notify_network_cmd_done(void);
+/*
+ * Implemented in failsafe/failsafe_core.c.  That directory is only built
+ * when CONFIG_WEBUI_FAILSAFE is enabled, so a weak fallback keeps telnetd
+ * linkable on its own.
+ */
+void __weak failsafe_notify_network_cmd_done(void)
+{
+}
 
 /* ================================================================== */
 /*  1. Constants                                                       */
@@ -56,12 +63,19 @@ extern void failsafe_notify_network_cmd_done(void);
 #define TELNETD_EDIT_BUF_SIZE	512
 #define TELNETD_HIST_MAX	16
 
+/*
+ * Maximum number of captured console bytes pushed to the client per
+ * MTK_TCP_CB_POLL tick.  Kept well below the TCP send window so a tick
+ * never blocks on retransmission while a transfer is in progress.
+ */
+#define TELNETD_STREAM_CHUNK	1024
+
 /* --- Fallback defaults --- */
-#ifndef WEBUI_FAILSAFE_GIT_HASH
-#define WEBUI_FAILSAFE_GIT_HASH "unknown"
+#ifndef TELNET_GIT_HASH
+#define TELNET_GIT_HASH "unknown"
 #endif
-#ifndef WEBUI_FAILSAFE_GIT_DIRTY
-#define WEBUI_FAILSAFE_GIT_DIRTY 0
+#ifndef TELNET_GIT_DIRTY
+#define TELNET_GIT_DIRTY 0
 #endif
 
 /* --- Cursor movement direction --- */
@@ -81,10 +95,26 @@ enum telnetd_state {
 	TELNETD_S_RESPONDING,
 };
 
+/*
+ * One queued output chunk.
+ *
+ * The TCP layer accepts a single buffer per connection at a time, so
+ * everything we produce goes through this FIFO: command output, streamed
+ * progress and the trailing prompt.  Ordering is therefore preserved even
+ * when a chunk has to wait for the previous one to be ACKed.
+ */
+struct telnetd_obuf {
+	struct telnetd_obuf *next;
+	char *data;
+	u32   len;
+};
+
 struct telnetd_pdata {
 	/* Connection state */
 	enum telnetd_state state;
 	bool executing;		 /* guard against re-entrant execute() */
+	bool streaming;		 /* executing + private capture buffer installed */
+	bool dead;		 /* client disconnected while a command ran */
 	bool skip_lf;		 /* LF-after-CR suppression */
 
 	/* Input buffer (raw TCP bytes) */
@@ -97,9 +127,10 @@ struct telnetd_pdata {
 	u32  cmdpos;		 /* cursor position, 0..cmdlen */
 
 	/* Out-of-band output (malloc'd, deferred send) */
-	char *outbuf;
+	struct telnetd_obuf *oq_head;
+	struct telnetd_obuf *oq_tail;
+	char *outbuf;		 /* buffer currently owned by the TCP layer */
 	u32   outbuf_len;
-	bool  outbuf_pending;
 
 	/* In-band edit responses (echo, backspace, cursor, IAC) */
 	char edit_outbuf[TELNETD_EDIT_BUF_SIZE];
@@ -118,6 +149,54 @@ static struct {
 	u16  port;
 	bool running;
 } telnetd_inst;
+
+/*
+ * pdata of a session that went away while a command was still executing.
+ *
+ * telnetd_execute() is several frames up the stack and still dereferences
+ * the pointer, so it cannot be freed from the CLOSED callback.  It is
+ * parked here instead and released on the next telnetd_callback() entry.
+ * Only one command can run at a time, so a single slot is sufficient.
+ */
+static struct telnetd_pdata *telnetd_orphan;
+
+/*
+ * Deferred command execution.
+ *
+ * run_command() MUST NOT run from inside an eth_rx() → TCP callback: the
+ * failsafe poll loop's outer eth_rx() frame is still suspended below and
+ * still owns an RX-ring descriptor (free_pkt runs only after the packet
+ * handler returns).  A command that enters net_loop() (tftp, ping, ...)
+ * would then drive eth_rx() recursively over the same DMA ring, corrupting
+ * descriptor ownership — which surfaces as a hard hang when such a command
+ * is aborted mid-transfer (eth_halt()/eth_init() reset the ring).
+ *
+ * Commands are therefore queued here and executed from the failsafe main
+ * poll loop via mtk_telnetd_poll(), i.e. outside any eth_rx() frame.
+ * Only one command may be queued or running at a time.
+ */
+static struct {
+	struct telnetd_pdata *pdata;
+	const void *conn;
+	char cmd[TELNETD_CMD_MAX];
+	bool pending;
+	bool active;
+} telnetd_exec_req;
+
+/*
+ * The web console is executing a command (defined in
+ * failsafe/modules/console.c).  Weak so telnetd links without failsafe.
+ */
+bool __weak failsafe_console_is_busy(void)
+{
+	return false;
+}
+
+static void telnetd_reap_orphan(void)
+{
+	free(telnetd_orphan);
+	telnetd_orphan = NULL;
+}
 
 /* ================================================================== */
 /*  3. Protocol layer                                                  */
@@ -270,10 +349,10 @@ static const char telnet_fallback_text[] =
 
 static size_t telnetd_build_greeting(char *buf, size_t sz)
 {
-	const char *hash = WEBUI_FAILSAFE_GIT_HASH;
+	const char *hash = TELNET_GIT_HASH;
 	const char *variant = NULL;
 	const char *prompt = telnetd_get_prompt();
-	bool dirty = !!WEBUI_FAILSAFE_GIT_DIRTY;
+	bool dirty = !!TELNET_GIT_DIRTY;
 	size_t off = 0;
 	int n;
 
@@ -603,40 +682,229 @@ static void hist_next(struct mtk_tcp_cb_data *cbd,
 /*  6. Command execution                                               */
 /* ================================================================== */
 
-/*
- * Queue or immediately send an out-of-band buffer.
- * On failure, saves pdata->outbuf for retry on MTK_TCP_CB_DATA_SENT.
- * Caller transfers ownership of @buf to this function.
- */
-static void telnetd_send_or_queue(struct mtk_tcp_cb_data *cbd,
-				  struct telnetd_pdata *pdata,
-				  char *buf, u32 len)
+/* --- Output FIFO --------------------------------------------------- */
+
+static void telnetd_oq_purge(struct telnetd_pdata *pdata)
 {
-	if (!buf || !len)
+	struct telnetd_obuf *o;
+
+	while (pdata->oq_head) {
+		o = pdata->oq_head;
+		pdata->oq_head = o->next;
+		free(o->data);
+		free(o);
+	}
+	pdata->oq_tail = NULL;
+}
+
+/*
+ * Hand the next queued chunk to the TCP layer.
+ *
+ * At most one chunk may be in flight per connection, so we stop as soon
+ * as one has been submitted.  A chunk that cannot be submitted yet stays
+ * at the head of the FIFO and is retried from MTK_TCP_CB_DATA_SENT or the
+ * next MTK_TCP_CB_POLL tick — no output is ever dropped.
+ */
+static void telnetd_oq_pump(struct mtk_tcp_cb_data *cbd,
+			    struct telnetd_pdata *pdata)
+{
+	struct telnetd_obuf *o = pdata->oq_head;
+
+	if (!o || pdata->outbuf)
 		return;
 
-	if (mtk_tcp_send_data(cbd->conn, buf, len)) {
-		/* Send failed → queue for retry */
-		pdata->outbuf = buf;
-		pdata->outbuf_len = len;
-		pdata->outbuf_pending = true;
-		pdata->state = TELNETD_S_RESPONDING;
+	if (mtk_tcp_send_data(cbd->conn, o->data, o->len))
+		return;		/* previous chunk still in flight */
+
+	pdata->oq_head = o->next;
+	if (!pdata->oq_head)
+		pdata->oq_tail = NULL;
+
+	/* TCP layer owns o->data now; freed on MTK_TCP_CB_DATA_SENT */
+	pdata->outbuf = o->data;
+	pdata->outbuf_len = o->len;
+	free(o);
+	pdata->state = TELNETD_S_RESPONDING;
+}
+
+/*
+ * Queue a malloc'd buffer for transmission and kick the pump.
+ * Ownership of @buf is transferred (also on failure).
+ */
+static void telnetd_emit(struct mtk_tcp_cb_data *cbd,
+			 struct telnetd_pdata *pdata,
+			 char *buf, u32 len)
+{
+	struct telnetd_obuf *o;
+
+	if (!buf || !len) {
+		free(buf);
 		return;
 	}
 
-	/* Sent successfully — will free on DATA_SENT */
-	pdata->outbuf = buf;
-	pdata->outbuf_len = len;
-	pdata->outbuf_pending = false;
-	pdata->state = TELNETD_S_RESPONDING;
+	o = malloc(sizeof(*o));
+	if (!o) {
+		free(buf);
+		return;
+	}
+
+	o->data = buf;
+	o->len = len;
+	o->next = NULL;
+
+	if (pdata->oq_tail)
+		pdata->oq_tail->next = o;
+	else
+		pdata->oq_head = o;
+	pdata->oq_tail = o;
+
+	telnetd_oq_pump(cbd, pdata);
+}
+
+/* --- Live streaming ------------------------------------------------ */
+
+/*
+ * Ask net_loop() to abort the running network command.
+ *
+ * ctrlc() only polls the serial console, so a telnet client could never
+ * interrupt a transfer.  The request is recorded here and consumed by
+ * net_loop() itself (mtk_tcp_abort_pending() in the MTK_TCP block of the
+ * main loop).  The loop then takes the exact same exit path as a serial
+ * Ctrl+C: net_cleanup_loop() + eth_halt() + -EINTR, all executed at loop
+ * level — never inside the eth_rx() → TCP callback chain we are running
+ * in, which would corrupt the DMA receive-descriptor state.
+ */
+static void telnetd_abort_netloop(void)
+{
+	mtk_tcp_abort_request();
+}
+
+/*
+ * Look for Ctrl+C in the input buffer while a command is running.
+ *
+ * telnetd_process_input() (the line editor) is suspended during execution,
+ * so incoming bytes sit in the raw input buffer.  Two representations of
+ * "Ctrl+C" are recognized:
+ *
+ *   - a raw ^C byte (0x03): sent by clients that do no telnet processing
+ *   - "IAC IP" (0xff 0xf4, Interrupt Process): sent by clients (e.g. the
+ *     Windows telnet client) that follow RFC 854 for an interrupt
+ *
+ * This is called from MTK_TCP_CB_DATA_RCVD as soon as the bytes arrive
+ * (and redundantly from the MTK_TCP_CB_POLL tick).
+ */
+static void telnetd_abort_check(struct mtk_tcp_cb_data *cbd)
+{
+	struct telnetd_pdata *pdata = cbd->pdata;
+	u32 i = 0;
+	bool abort = false;
+
+	if (!pdata || !pdata->executing || !pdata->inbuf_size)
+		return;
+
+	while (i < pdata->inbuf_size) {
+		if (pdata->inbuf[i] == '\x03') {
+			abort = true;
+			i++;
+			continue;
+		}
+
+		/*
+		 * IAC IP (0xff 0xf4).  Command execution never reaches the
+		 * IAC parser (telnetd_process_iac), so the sequence is still
+		 * verbatim in the buffer.
+		 */
+		if ((unsigned char)pdata->inbuf[i] == IAC &&
+		    i + 1 < pdata->inbuf_size &&
+		    (unsigned char)pdata->inbuf[i + 1] == 244 /* IP */) {
+			abort = true;
+			i += 2;
+			continue;
+		}
+
+		i++;
+	}
+
+	if (!abort)
+		return;
+
+	/* Drop whatever else was typed during the command */
+	pdata->inbuf_size = 0;
+	pdata->inbuf[0] = '\0';
+
+	/*
+	 * Tell the client, then record the abort request.
+	 *
+	 * The ^C marker goes through the console capture buffer (like the web
+	 * console abort does) instead of being pushed to the TCP layer right
+	 * here: we are inside the eth_rx() → TCP RX callback of the running
+	 * command's own net_loop(), and touching the TX path of that very
+	 * connection from within its RX processing is the one thing that is
+	 * guaranteed to differ from the (working) web-console abort.  The
+	 * marker is streamed out by the regular drain once the command stops,
+	 * together with the "\nAbort\n" the net_loop() abort path prints.
+	 */
+	if (gd && (gd->flags & GD_FLG_RECORD))
+		printf("\n^C\n");
+
+	telnetd_abort_netloop();
+}
+
+/*
+ * Push whatever the running command has printed so far to the client.
+ *
+ * Called from MTK_TCP_CB_POLL, i.e. from inside the net_loop() of the very
+ * command we are waiting for.  Without this the whole output of e.g.
+ * "tftp" (the '#' progress marks) would only be flushed after the
+ * transfer finished, making the session look hung.
+ *
+ * MTK_TCP_CB_POLL is only issued when the connection has no chunk in
+ * flight, so mtk_tcp_send_data() normally succeeds; if it does not, the
+ * chunk stays in the FIFO and is retried on the next tick.
+ */
+static void telnetd_stream_tick(struct mtk_tcp_cb_data *cbd)
+{
+	struct telnetd_pdata *pdata = cbd->pdata;
+	struct membuf *mb = (struct membuf *)&gd->console_out;
+	int avail, got;
+	char *raw, *norm;
+	size_t norm_len;
+
+	if (!pdata || !pdata->streaming)
+		return;
+
+	if (!gd || !(gd->flags & GD_FLG_RECORD) || !mb->start)
+		return;
+
+	avail = membuf_avail(mb);
+	if (avail <= 0)
+		return;
+	if (avail > TELNETD_STREAM_CHUNK)
+		avail = TELNETD_STREAM_CHUNK;
+
+	raw = malloc(avail);
+	if (!raw)
+		return;
+
+	got = membuf_get(mb, raw, avail);
+	if (got <= 0) {
+		free(raw);
+		return;
+	}
+
+	norm = telnetd_normalize_output(raw, got, &norm_len);
+	free(raw);
+
+	telnetd_emit(cbd, pdata, norm, norm_len);
 }
 
 /*
  * Execute a U-Boot command on behalf of a telnet client.
  *
  * Captures console output, normalizes line endings to CRLF, and
- * delivers the result back to the client (or queues it if the TCP
- * send buffer is full).
+ * delivers the result back to the client.  While the command runs,
+ * MTK_TCP_CB_POLL drains the capture buffer so progress output is
+ * streamed live instead of arriving in one burst at the end.
  */
 static void telnetd_execute(struct mtk_tcp_cb_data *cbd,
 			    const char *cmd)
@@ -657,7 +925,7 @@ static void telnetd_execute(struct mtk_tcp_cb_data *cbd,
 		if (buf) {
 			buf[0] = '\r'; buf[1] = '\n';
 			memcpy(buf + 2, prompt, strlen(prompt));
-			telnetd_send_or_queue(cbd, pdata, buf,
+			telnetd_emit(cbd, pdata, buf,
 					      strlen(prompt) + 2);
 		}
 		return;
@@ -670,7 +938,7 @@ static void telnetd_execute(struct mtk_tcp_cb_data *cbd,
 		if (err) {
 			snprintf(err, 64,
 				 "Error: console recording unavailable\r\n");
-			telnetd_send_or_queue(cbd, pdata, err, strlen(err));
+			telnetd_emit(cbd, pdata, err, strlen(err));
 		}
 		return;
 	}
@@ -689,16 +957,69 @@ static void telnetd_execute(struct mtk_tcp_cb_data *cbd,
 		  strstr(cmd, "wget") || strstr(cmd, "tcp");
 
 	/*
+	 * Terminate the line the client has just typed (the client echoes
+	 * its own input, we only owe it the newline), then enable live
+	 * streaming so the rest arrives as it is produced.
+	 */
+	{
+		char *nl = malloc(2);
+
+		if (nl) {
+			nl[0] = '\r'; nl[1] = '\n';
+			telnetd_emit(cbd, pdata, nl, 2);
+		}
+	}
+
+	/*
 	 * executing guard: net_loop() calls mtk_tcp_periodic_check()
 	 * which can re-enter this callback.  Block re-entry.
+	 *
+	 * streaming additionally enables telnetd_stream_tick(); it is only
+	 * safe when we own a private capture buffer.
 	 */
 	pdata->executing = true;
+	pdata->streaming = use_private;
+
+	/*
+	 * Drop any Ctrl+C request made while the command was still queued
+	 * (before it started executing) so it cannot abort the fresh run.
+	 */
+	mtk_tcp_abort_clear();
+
 	run_command(cmd, 0);
+	pdata->streaming = false;
 	pdata->executing = false;
+
+	/*
+	 * A Ctrl+C abort request is normally consumed by the command's own
+	 * net_loop().  If the command did not go through net_loop() (or the
+	 * request lost the race against loop exit), drop any stale request
+	 * so it cannot abort a later, unrelated command.
+	 */
+	mtk_tcp_abort_clear();
+
+	/*
+	 * The client disconnected while the command was running: the
+	 * connection (and cbd->conn) is already gone, so stop here and
+	 * let telnetd_orphan handle the memory.
+	 */
+	if (pdata->dead) {
+		if (use_private) {
+			membuf_dispose(&gd->console_out);
+			gd->console_out = saved_out;
+		}
+		free(raw_out);
+		cbd->pdata = NULL;
+		return;
+	}
 
 	hist_save(pdata, cmd);
 
-	/* Schedule eth reinit outside the callback chain */
+	/*
+	 * A network command leaves eth halted (net_loop() → eth_halt()).
+	 * Let the failsafe poll loop bring it back up: eth_init() must not
+	 * be called from inside the eth_rx() → TCP callback chain.
+	 */
 	if (was_net)
 		failsafe_notify_network_cmd_done();
 
@@ -708,7 +1029,7 @@ static void telnetd_execute(struct mtk_tcp_cb_data *cbd,
 	else
 		printf("%s", prompt);
 
-	/* Read and deliver captured output */
+	/* Read and deliver whatever is left of the captured output */
 	avail = membuf_avail(&gd->console_out);
 	if (avail > TELNETD_OUTBUF_SIZE)
 		avail = TELNETD_OUTBUF_SIZE;
@@ -717,35 +1038,31 @@ static void telnetd_execute(struct mtk_tcp_cb_data *cbd,
 		size_t norm_len = 0;
 		int got;
 
-		raw_out = malloc(avail + 2);
+		raw_out = malloc(avail);
 		if (raw_out) {
-			raw_out[0] = '\r'; raw_out[1] = '\n';
-			got = membuf_get(&gd->console_out, raw_out + 2, avail);
+			got = membuf_get(&gd->console_out, raw_out, avail);
 			{
 				char *norm = telnetd_normalize_output(
-					raw_out, got + 2, &norm_len);
+					raw_out, got, &norm_len);
 				if (norm) {
 					free(raw_out);
 					raw_out = NULL;
-					telnetd_send_or_queue(cbd, pdata,
-							      norm, norm_len);
+					telnetd_emit(cbd, pdata,
+						     norm, norm_len);
 				} else {
-					telnetd_send_or_queue(cbd, pdata,
-							      raw_out,
-							      got + 2);
+					telnetd_emit(cbd, pdata,
+						     raw_out, got);
 					raw_out = NULL;
 				}
 			}
 		}
 	} else {
 		/* No output → send prompt to show completion */
-		char *buf = malloc(strlen(prompt) + 3);
+		char *buf = malloc(strlen(prompt) + 1);
 
 		if (buf) {
-			buf[0] = '\r'; buf[1] = '\n';
-			memcpy(buf + 2, prompt, strlen(prompt));
-			telnetd_send_or_queue(cbd, pdata, buf,
-					      strlen(prompt) + 2);
+			memcpy(buf, prompt, strlen(prompt));
+			telnetd_emit(cbd, pdata, buf, strlen(prompt));
 		}
 	}
 
@@ -754,6 +1071,115 @@ static void telnetd_execute(struct mtk_tcp_cb_data *cbd,
 		gd->console_out = saved_out;
 	}
 	free(raw_out);
+}
+
+/* --- Deferred execution (queue from callback, run from main loop) --- */
+
+/*
+ * Queue a command for later execution by mtk_telnetd_poll().
+ *
+ * Called from the line editor (inside a TCP RX callback).  We must NOT
+ * call run_command() here — see telnetd_exec_req above — so we only store
+ * the request and block further editing of this session.
+ */
+static void telnetd_request_execute(struct mtk_tcp_cb_data *cbd,
+				    const char *cmd)
+{
+	struct telnetd_pdata *pdata = cbd->pdata;
+	const char *prompt = telnetd_get_prompt();
+
+	/* Empty command → just reprint prompt */
+	if (!cmd[0]) {
+		char *buf = malloc(strlen(prompt) + 3);
+
+		if (buf) {
+			buf[0] = '\r'; buf[1] = '\n';
+			memcpy(buf + 2, prompt, strlen(prompt));
+			telnetd_emit(cbd, pdata, buf, strlen(prompt) + 2);
+		}
+		return;
+	}
+
+	/* Ensure console recording */
+	if (telnetd_ensure_recording()) {
+		char *err = malloc(64);
+
+		if (err) {
+			snprintf(err, 64,
+				 "Error: console recording unavailable\r\n");
+			telnetd_emit(cbd, pdata, err, strlen(err));
+		}
+		return;
+	}
+
+	if (pdata->executing || telnetd_exec_req.pending ||
+	    telnetd_exec_req.active || failsafe_console_is_busy()) {
+		/* Another command is queued or running somewhere */
+		char *err = malloc(32);
+
+		if (err) {
+			snprintf(err, 32, "\r\nbusy\r\n");
+			telnetd_emit(cbd, pdata, err, strlen(err));
+		}
+		return;
+	}
+
+	strncpy(telnetd_exec_req.cmd, cmd, TELNETD_CMD_MAX - 1);
+	telnetd_exec_req.cmd[TELNETD_CMD_MAX - 1] = '\0';
+	telnetd_exec_req.pdata = pdata;
+	telnetd_exec_req.conn = cbd->conn;
+	telnetd_exec_req.pending = true;
+
+	/* Suspend this session's line editor until the command finishes */
+	pdata->executing = true;
+}
+
+bool mtk_telnetd_exec_pending(void)
+{
+	return telnetd_exec_req.pending;
+}
+
+bool mtk_telnetd_exec_active(void)
+{
+	return telnetd_exec_req.pending || telnetd_exec_req.active;
+}
+
+/*
+ * Run the queued command.
+ *
+ * Called from the failsafe main poll loop, OUTSIDE any eth_rx() frame, so
+ * a network command (tftp, ...) can enter net_loop() and be aborted there
+ * exactly like on the serial console without corrupting the RX ring.
+ */
+void mtk_telnetd_poll(void)
+{
+	struct mtk_tcp_cb_data cbd = {};
+	struct telnetd_pdata *pdata = telnetd_exec_req.pdata;
+
+	if (!telnetd_exec_req.pending)
+		return;
+
+	/* The session may have gone away while the command was queued */
+	if (!pdata || pdata->dead) {
+		telnetd_exec_req.pending = false;
+		telnetd_exec_req.pdata = NULL;
+		return;
+	}
+
+	cbd.conn = telnetd_exec_req.conn;
+	cbd.pdata = pdata;
+
+	telnetd_exec_req.pending = false;
+	telnetd_exec_req.active = true;
+	telnetd_execute(&cbd, telnetd_exec_req.cmd);
+	telnetd_exec_req.active = false;
+
+	/*
+	 * telnetd_execute() clears cbd->pdata when the session was closed
+	 * during the run.  The pdata itself is parked in telnetd_orphan
+	 * and freed on the next callback; never dereference it here.
+	 */
+	telnetd_exec_req.pdata = NULL;
 }
 
 /* ================================================================== */
@@ -801,7 +1227,14 @@ static bool input_process_byte(struct mtk_tcp_cb_data *cbd,
 		if (c == '\r')
 			pdata->skip_lf = true;
 		pdata->cmdbuf[pdata->cmdlen] = '\0';
-		telnetd_execute(cbd, pdata->cmdbuf);
+		telnetd_request_execute(cbd, pdata->cmdbuf);
+		/*
+		 * The client may have disconnected while the command was
+		 * queued/running: the executor then releases the session and
+		 * clears cbd->pdata.  @pdata is dangling from here on.
+		 */
+		if (!cbd->pdata)
+			return false;
 		line_reset(pdata);
 		return (pdata->state == TELNETD_S_IDLE);
 	}
@@ -1008,10 +1441,11 @@ static void telnetd_process_input(struct mtk_tcp_cb_data *cbd)
 	}
 
 	/* Flush accumulated edit responses */
-	edit_flush(cbd, pdata);
+	if (cbd->pdata)
+		edit_flush(cbd, pdata);
 
 	/* Remove consumed bytes */
-	if (i > 0) {
+	if (i > 0 && cbd->pdata) {
 		u32 rem = pdata->inbuf_size - i;
 
 		if (rem > 0)
@@ -1034,7 +1468,7 @@ static void telnetd_send_greeting(struct mtk_tcp_cb_data *cbd,
 	if (greeting) {
 		len = telnetd_build_greeting(greeting, 512);
 		if (len) {
-			telnetd_send_or_queue(cbd, pdata, greeting, len);
+			telnetd_emit(cbd, pdata, greeting, len);
 			return;
 		}
 		free(greeting);
@@ -1049,16 +1483,16 @@ static void telnetd_send_greeting(struct mtk_tcp_cb_data *cbd,
 		if (fb) {
 			memcpy(fb, telnet_iac_nego, nego);
 			memcpy(fb + nego, telnet_fallback_text, text);
-			telnetd_send_or_queue(cbd, pdata, fb, nego + text);
+			telnetd_emit(cbd, pdata, fb, nego + text);
 		} else {
 			/* Last resort: send separately */
 			mtk_tcp_send_data(cbd->conn, telnet_iac_nego,
 					 sizeof(telnet_iac_nego));
 			mtk_tcp_send_data(cbd->conn, telnet_fallback_text,
 					 sizeof(telnet_fallback_text) - 1);
+			telnetd_oq_purge(pdata);
 			pdata->outbuf = NULL;
 			pdata->outbuf_len = 0;
-			pdata->outbuf_pending = false;
 			pdata->state = TELNETD_S_RESPONDING;
 		}
 	}
@@ -1068,6 +1502,8 @@ static void telnetd_callback(struct mtk_tcp_cb_data *cbd)
 {
 	struct telnetd_pdata *pdata;
 	u8 sip[4];
+
+	telnetd_reap_orphan();
 
 	switch (cbd->status) {
 
@@ -1103,8 +1539,20 @@ static void telnetd_callback(struct mtk_tcp_cb_data *cbd)
 			cbd->datalen = 0;
 		}
 
-		/* Process only when idle and not re-entered from net_loop() */
-		if (pdata->state == TELNETD_S_IDLE && !pdata->executing)
+		/*
+		 * While a command is running the line editor is suspended;
+		 * the only input worth acting on is Ctrl+C.  The bytes only
+		 * reach us because the command's own net_loop() is pumping
+		 * eth_rx(), so issuing the abort from here takes effect
+		 * immediately — no need to wait for a POLL tick.
+		 */
+		if (pdata->executing) {
+			telnetd_abort_check(cbd);
+			break;
+		}
+
+		/* Process only when idle */
+		if (pdata->state == TELNETD_S_IDLE)
 			telnetd_process_input(cbd);
 		break;
 
@@ -1116,33 +1564,63 @@ static void telnetd_callback(struct mtk_tcp_cb_data *cbd)
 		if (pdata->state != TELNETD_S_RESPONDING)
 			break;
 
-		/* Retry queued output if pending */
-		if (pdata->outbuf_pending) {
-			if (!mtk_tcp_send_data(cbd->conn, pdata->outbuf,
-					       pdata->outbuf_len)) {
-				pdata->outbuf_pending = false;
-				return;
-			}
-			pdata->outbuf_pending = false;
-		}
-
+		/* The TCP layer is done with the previous chunk */
 		free(pdata->outbuf);
 		pdata->outbuf = NULL;
 		pdata->outbuf_len = 0;
 		pdata->state = TELNETD_S_IDLE;
+
+		/* Submit whatever else is queued (streamed output, prompt) */
+		telnetd_oq_pump(cbd, pdata);
 
 		/* Process buffered input that arrived while sending */
 		if (pdata->inbuf_size > 0 && !pdata->executing)
 			telnetd_process_input(cbd);
 		break;
 
+	case MTK_TCP_CB_POLL:
+		pdata = cbd->pdata;
+		if (!pdata)
+			break;
+
+		/*
+		 * Runs from net_loop() while a command is executing, so the
+		 * client sees progress output as it is produced and can
+		 * abort with Ctrl+C.
+		 */
+		if (pdata->executing) {
+			telnetd_abort_check(cbd);
+			telnetd_stream_tick(cbd);
+			break;
+		}
+
+		if (pdata->state == TELNETD_S_IDLE)
+			telnetd_oq_pump(cbd, pdata);
+		break;
+
 	case MTK_TCP_CB_REMOTE_CLOSED:
 	case MTK_TCP_CB_CLOSED:
 		pdata = cbd->pdata;
 		if (pdata) {
+			/*
+			 * A connection can go away while a command is still
+			 * running (long tftp, flash erase, ...).  Stop all output
+			 * immediately and, if telnetd_execute() is still on the
+			 * stack, defer the free — see telnetd_orphan.
+			 */
+			pdata->streaming = false;
+			telnetd_oq_purge(pdata);
 			free(pdata->outbuf);
-			free(pdata);
-		}
+			pdata->outbuf = NULL;
+			pdata->outbuf_len = 0;
+
+			if (pdata->executing) {
+				pdata->dead = true;
+				telnetd_orphan = pdata;
+			} else {
+				free(pdata);
+			}
+			}
 		memcpy(sip, &cbd->sip, 4);
 		printf("Telnet connection closed %d.%d.%d.%d:%d\n",
 		       sip[0], sip[1], sip[2], sip[3], ntohs(cbd->sp));

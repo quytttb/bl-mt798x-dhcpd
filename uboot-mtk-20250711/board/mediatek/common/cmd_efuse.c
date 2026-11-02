@@ -11,7 +11,7 @@
 #include <malloc.h>
 #include <vsprintf.h>
 #include <string.h>
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 #include "mtk_efuse.h"
 
 static int do_efuse_read(struct cmd_tbl *cmdtp, int flag, int argc,
