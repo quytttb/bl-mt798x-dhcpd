@@ -16,6 +16,7 @@
 #define COLOR_INPUT	"\x1b[4;36m"
 #define COLOR_ERROR	"\x1b[93;41m"
 #define COLOR_CAUTION	"\x1b[1;31m"
+#define COLOR_SUCCESS	"\x1b[32m"
 #define COLOR_NORMAL	"\x1b[0m"
 
 #define cprintln(color, fmt, ...) \

@@ -13,11 +13,12 @@
 #include <linux/string.h>
 #include <asm/global_data.h>
 #include <failsafe/fw_type.h>
+#include <failsafe/error.h>
 #ifdef CONFIG_CMD_GL_BTN
 #include <glbtn.h>
 #endif
 #include "upgrade_helper.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -48,7 +49,7 @@ static const struct data_part_entry *find_part(const struct data_part_entry *par
 			return &parts[i];
 	}
 
-	cprintln(ERROR, "*** Invalid upgrading part! ***");
+	failsafe_error(-EINVAL, "Invalid upgrading part");
 
 	return NULL;
 }
@@ -68,7 +69,7 @@ int failsafe_validate_image(const void *data, size_t size, failsafe_fw_t fw)
 
 	if (!upgrade_parts || !num_parts) {
 		printf("mtkupgrade is not configured!\n");
-		return -ENOSYS;
+		return failsafe_error(-ENOSYS, "mtkupgrade is not configured");
 	}
 
 	dpe = find_part(upgrade_parts, num_parts, fw_to_part_name(fw));
@@ -88,10 +89,16 @@ int failsafe_validate_image(const void *data, size_t size, failsafe_fw_t fw)
 		dpe = find_part(upgrade_parts, num_parts, "bl");
 #endif
 	if (!dpe)
-		return -ENODEV;
+		return failsafe_error(-ENODEV, "no data partition for '%s'",
+				      fw_to_part_name(fw));
 
-	if (dpe->validate)
-		return dpe->validate(dpe->priv, dpe, data, size);
+	if (dpe->validate) {
+		int ret = dpe->validate(dpe->priv, dpe, data, size);
+
+		if (ret)
+			return failsafe_error(ret,
+				"'%s' image validation FAILED", dpe->name);
+	}
 
 	return 0;
 }
@@ -106,7 +113,7 @@ int failsafe_write_image(const void *data, size_t size, failsafe_fw_t fw)
 
 	if (!upgrade_parts || !num_parts) {
 		printf("mtkupgrade is not configured!\n");
-		return -ENOSYS;
+		return failsafe_error(-ENOSYS, "mtkupgrade is not configured");
 	}
 
 	dpe = find_part(upgrade_parts, num_parts, fw_to_part_name(fw));
@@ -126,7 +133,8 @@ int failsafe_write_image(const void *data, size_t size, failsafe_fw_t fw)
 		dpe = find_part(upgrade_parts, num_parts, "bl");
 #endif
 	if (!dpe)
-		return -ENODEV;
+		return failsafe_error(-ENODEV, "no data partition for '%s'",
+				      fw_to_part_name(fw));
 
 #ifdef CONFIG_CMD_GL_BTN
 	led_control("led", "system_led", "off");
@@ -144,7 +152,7 @@ int failsafe_write_image(const void *data, size_t size, failsafe_fw_t fw)
 	led_control("led", "system_led", "on");
 #endif
 	if (ret)
-		return ret;
+		return failsafe_error(ret, "'%s' image write FAILED", dpe->name);
 
 	printf("\n");
 	cprintln(PROMPT, "*** %s upgrade completed! ***", dpe->name);

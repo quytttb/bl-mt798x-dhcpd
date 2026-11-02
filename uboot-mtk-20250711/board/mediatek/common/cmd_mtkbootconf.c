@@ -18,7 +18,7 @@
 #include <linux/types.h>
 #include <linux/delay.h>
 
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 #include "boot_helper.h"
 #include "load_data.h"
 

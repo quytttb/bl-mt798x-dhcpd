@@ -161,6 +161,19 @@ void httpd_free_instance(struct httpd_instance *httpd_inst)
 	struct httpd_instance *inst;
 	struct _httpd_uri_handler *u;
 
+	/*
+	 * Connections from an earlier session can still be tracked by the
+	 * TCP stack: stop restarting the web failsafe does not complete a
+	 * FIN handshake, so conn_head keeps them with their per-connection
+	 * data pointing at the uri handlers owned by this instance.
+	 *
+	 * Tear them down *before* the handlers are freed.  Otherwise the
+	 * next session's first packet on such a stale connection runs
+	 * httpd_cleanup()/httpd_rx() against freed uri handlers, which takes
+	 * the whole network stack (and the board) down.
+	 */
+	mtk_tcp_close_conn_by_port(htons(httpd_inst->port));
+
 	mtk_tcp_listen_stop(htons(httpd_inst->port));
 
 	inst = httpd_find_instance(httpd_inst->port);
@@ -639,7 +652,19 @@ static int httpd_handle_request(struct httpd_instance *inst,
 		return 1;
 	}
 
-	if (req->method == HTTP_POST) {
+	/*
+	 * Splitting the body only makes sense for a multipart/form-data
+	 * request, and its boundary is what httpd_recv_hdr() extracted from
+	 * the Content-Type header.  A POST that carries no body has no
+	 * Content-Type header at all -- that is what a browser sends for
+	 * fetch(url, {method: "POST"}) (Content-Length: 0, nothing else) --
+	 * so pdata->boundary is still NULL here.  There is no form to parse
+	 * then, and dereferencing the boundary takes the whole board down:
+	 * strlen(NULL) walks the low address space until it reaches an
+	 * undecoded bus region (aarch64 reports that as a synchronous
+	 * external abort, with x0 still holding the original NULL).
+	 */
+	if (req->method == HTTP_POST && pdata->boundary) {
 		boundarylen = strlen(pdata->boundary);
 		boundary = malloc(boundarylen + 3);
 		if (!boundary) {

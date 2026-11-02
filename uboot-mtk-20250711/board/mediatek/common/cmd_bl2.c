@@ -8,7 +8,7 @@
 #include <command.h>
 #include <vsprintf.h>
 #include "bl2_helper.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 
 enum bl2_cmd {
 	BL2_CHECK_IMAGE,
