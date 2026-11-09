@@ -7,7 +7,7 @@
 
 #include "bootmenu_common.h"
 #include "autoboot_helper.h"
-#include "colored_print.h"
+#include <failsafe/cprint.h>
 #include "mmc_helper.h"
 #include "bsp_conf.h"
 

@@ -1012,6 +1012,19 @@ input[type="button"].button-danger {
         0 12px 28px rgba(220, 38, 38, 0.24);
 }
 
+button.button.button-success,
+input[type="button"].button-success {
+    border-color: rgba(22, 163, 74, 0.46);
+    background: linear-gradient(180deg,
+        rgba(34, 197, 94, 0.98) 0%,
+        rgba(21, 128, 61, 0.86) 100%);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.26) inset,
+        0 -1px 0 rgba(0, 0, 0, 0.12) inset,
+        0 4px 12px rgba(22, 163, 74, 0.22),
+        0 12px 28px rgba(22, 163, 74, 0.24);
+}
+
 input[type="button"]:hover,
 button.button:hover {
     filter: brightness(1.07);
@@ -1039,6 +1052,15 @@ input[type="button"].button-danger:hover {
         0 -1px 0 rgba(0, 0, 0, 0.12) inset,
         0 6px 16px rgba(220, 38, 38, 0.28),
         0 16px 32px rgba(220, 38, 38, 0.28);
+}
+
+button.button.button-success:hover,
+input[type="button"].button-success:hover {
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.30) inset,
+        0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+        0 6px 14px rgba(22, 163, 74, 0.24),
+        0 14px 30px rgba(34, 197, 94, 0.26);
 }
 
 input[type="button"]:active,
@@ -1585,8 +1607,8 @@ ul li {
 .console-output {
     height: 300px;
     overflow: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
+    white-space: pre;
+    word-break: normal;
     font-family: var(--font-mono);
     font-size: 0.75rem;
     line-height: 1.55;
@@ -1631,6 +1653,33 @@ html[data-theme="dark"] .console-output {
             #090f19;
         border-color: rgba(148, 163, 184, 0.18);
     }
+}
+
+/* ── ANSI grid (U-Boot bootmenu / bootflow rendering) ─────────────── */
+/*
+ * Each row painted by the in-memory VT100 emulator lives inside a
+ * `.ans-row` div.  Adjacent same-styled cells are coalesced into a
+ * single <span> with explicit color / background inline styles so the
+ * bootmenu palette matches what the U-Boot serial console draws.
+ *
+ * `.ans-row` is a block: prevents `.console-output`'s `white-space:
+ * pre` from letting adjacent rows merge on a single visual line when
+ * an upstream cursor-up / cursor-down sequence overwrites a previous
+ * line.  Spans inside a row are inline so the grid's column model
+ * stays aligned even for multi-cell SGR segments.
+ *
+ * `.ans-bold` toggles the heavier font weight rendered by bootmenu
+ * for `[1;39m` (the bright bold accent in the OpenWrt banner).
+ */
+.console-output .ans-row {
+    display: block;
+    white-space: pre;
+    min-height: 1em;
+    line-height: inherit;
+}
+
+.console-output .ans-bold {
+    font-weight: 700;
 }
 
 .console-toolbar {
@@ -1913,11 +1962,11 @@ body[data-page="reboot"] #m {
 }
 
 .reboot-options {
-    width: min(520px, 100%);
+    width: min(640px, 100%);
     margin: 6px auto 0;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
 }
 
 .reboot-option {
@@ -1926,7 +1975,7 @@ body[data-page="reboot"] #m {
     align-items: center;
     justify-content: center;
     gap: 4px;
-    padding: 14px 16px;
+    padding: 13px 12px;
     min-height: 78px;
     text-align: center;
     line-height: 1.3;
