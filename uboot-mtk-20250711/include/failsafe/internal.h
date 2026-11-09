@@ -84,6 +84,14 @@ void result_handler(enum httpd_uri_handler_status status,
 void mtd_layout_handler(enum httpd_uri_handler_status status,
 	struct httpd_request *request,
 	struct httpd_response *response);
+/**
+ * last_error_handler - GET /last-error: code and message of the last
+ * failed upgrade operation, as the failed /upload and /result responses
+ * report them (see <failsafe/error.h>).
+ */
+void last_error_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response);
 
 /* ---- sub-module handlers ---- */
 

@@ -38,6 +38,29 @@ void arp_init(void)
 	arp_tx_packet -= (ulong)arp_tx_packet % PKTALIGN;
 }
 
+void arp_wait_clear(void)
+{
+	/*
+	 * Drop any pending ARP resolution.
+	 *
+	 * Must be called whenever the owner of the wait state goes away:
+	 * arp_wait_packet_ethaddr points into the buffer or connection that
+	 * asked for the resolution.  If that owner is freed without clearing
+	 * the state, a later ARP reply writes through a dangling pointer and
+	 * net_tx_packet is transmitted with a stale length.
+	 *
+	 * A networking session that does not run arp_timeout_check() (the
+	 * web failsafe pumps eth_rx() from its own poll loop) never times
+	 * this state out, so it would otherwise survive the session and
+	 * leak into the next one.
+	 */
+	net_arp_wait_packet_ip.s_addr = 0;
+	net_arp_wait_reply_ip.s_addr = 0;
+	arp_wait_packet_ethaddr = NULL;
+	arp_wait_tx_packet_size = 0;
+	arp_wait_try = 0;
+}
+
 void arp_raw_request(struct in_addr source_ip, const uchar *target_ethaddr,
 	struct in_addr target_ip)
 {

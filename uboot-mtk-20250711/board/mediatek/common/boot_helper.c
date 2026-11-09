@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <image.h>
 #include <malloc.h>
+#include <cpu_func.h>
 #include <linux/types.h>
 #include <linux/sizes.h>
 #include <linux/ctype.h>
@@ -232,6 +233,55 @@ cleanup:
 	free(cmd);
 
 	return ret;
+}
+
+/*
+ * Failsafe in-memory boot helper.
+ *
+ * Boots an image that the web UI uploaded straight into RAM (no flash
+ * write).  Parseable images (FIT / legacy uImage) are started with the
+ * normal bootm path (boot_from_mem).  Anything else is treated as a raw
+ * binary and jumped to with the "go" command.
+ *
+ * For the raw-binary case the image may have been copied into its buffer
+ * while caches were active, so flush the D-cache and invalidate the
+ * I-cache before executing to avoid running stale instructions.
+ */
+int boot_image_from_mem(ulong data_load_addr, size_t image_size,
+				 ulong load_fallback)
+{
+	ulong load_addr;
+	char cmd[96];
+	int ret;
+
+	switch (genimg_get_format((const void *)data_load_addr)) {
+	case IMAGE_FORMAT_FIT:
+	case IMAGE_FORMAT_LEGACY:
+		/* Parseable boot image: use bootm (the initramfs path). */
+		return boot_from_mem(data_load_addr);
+
+	default:
+		/*
+		 * Raw binary: jump straight to it with "go".  Honour the
+		 * 'loadaddr' env if set, otherwise fall back to the address
+		 * the upload buffer already occupies.
+		 */
+		load_addr = env_get_ulong("loadaddr", 16, load_fallback);
+
+		if (load_addr != data_load_addr)
+			memcpy((void *)load_addr, (const void *)data_load_addr,
+			       image_size);
+
+		flush_cache(load_addr, image_size);
+		invalidate_icache_all();
+		printf("\n*** Failsafe: raw image - 'go 0x%lx' ***\n", load_addr);
+		snprintf(cmd, sizeof(cmd), "go 0x%lx", load_addr);
+		ret = run_command(cmd, 0);
+		if (ret)
+			printf("Failsafe: 'go 0x%lx' failed (ret=%d)\n",
+			       load_addr, ret);
+		return ret;
+	}
 }
 
 const char *get_arg_next(const char *args, const char **param,
